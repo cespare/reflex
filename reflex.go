@@ -9,8 +9,13 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/howeyc/fsnotify"
+)
+
+const (
+	subSymbol = "{}"
 )
 
 var (
@@ -83,7 +88,7 @@ func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done cha
 // runCommand runs the specified command, replacing {} in args with the provided filename. Blocks until the
 // command exits.
 func runCommand(command []string, path string) {
-	replacer := strings.NewReplacer("{}", path)
+	replacer := strings.NewReplacer(subSymbol, path)
 	args := make([]string, len(command))
 	for i, c := range command {
 		args[i] = replacer.Replace(c)
@@ -117,6 +122,37 @@ func filterMatching(in <-chan string, out chan<- string, regex *regexp.Regexp) {
 	}
 }
 
+// batchRun receives realtime file notification events and batches them up. It's a bit tricky, but here's what
+// it accomplishes:
+// * When we initially get a message, wait a bit and batch messages before trying to send anything. This is
+//	 because the file events come in quick bursts.
+// * Once it's time to send, don't do it until the out channel is unblocked. In the meantime, keep batching.
+//   When we've sent off all the batched messages, go back to the beginning.
+func batchRun(in <-chan string, out chan<- string, backlog Backlog) {
+	for name := range in {
+		backlog.Add(name)
+		timer := time.NewTimer(500 * time.Millisecond)
+	outer:
+		for {
+			select {
+			case name := <-in:
+				backlog.Add(name)
+			case <-timer.C:
+				for {
+					select {
+					case name := <-in:
+						backlog.Add(name)
+					case out <- backlog.Next():
+						if backlog.RemoveOne() {
+							break outer
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 // runEach runs the command on each name that comes through the names channel.
 func runEach(names <-chan string, command []string) {
 	for name := range names {
@@ -131,6 +167,19 @@ func main() {
 	if len(command) == 0 {
 		Fatalln("Must give command to execute.")
 	}
+	substitution := false
+	for _, part := range command {
+		if strings.Contains(part, subSymbol) {
+			substitution = true
+			break
+		}
+	}
+	var backlog Backlog
+	if substitution {
+		backlog = &UniqueFilesBacklog{true, "", make(map[string]struct{})}
+	} else {
+		backlog = new(UnifiedBacklog)
+	}
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -141,10 +190,12 @@ func main() {
 	done := make(chan error)
 	rawChanges := make(chan string)
 	filtered := make(chan string)
+	batched := make(chan string)
 
 	go watch(".", watcher, rawChanges, done)
 	go filterMatching(rawChanges, filtered, regex)
-	go runEach(filtered, command)
+	go batchRun(filtered, batched, backlog)
+	go runEach(batched, command)
 
 	Fatalln(<-done)
 }
