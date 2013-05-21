@@ -1,12 +1,39 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/howeyc/fsnotify"
 )
+
+var (
+	regexString string
+	matchAll    = regexp.MustCompile(".*")
+)
+
+func init() {
+	flag.StringVar(&regexString, "r", "", "The regular expression to match filenames.")
+}
+
+func parseRegex() *regexp.Regexp {
+	if regexString == "" {
+		fmt.Println("Warning: no regex given (-r), so matching all file changes.")
+		return matchAll
+	}
+
+	r, err := regexp.Compile(regexString)
+	if err != nil {
+		Fatalln("Bad regular expression provided.\n" + err.Error())
+	}
+	return r
+}
 
 func Fatalln(args ...interface{}) {
 	fmt.Println(args...)
@@ -53,13 +80,50 @@ func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done cha
 	}
 }
 
-func printNames(names <-chan string) {
+func runCommand(command []string, path string) {
+	replacer := strings.NewReplacer("{}", path)
+	args := make([]string, len(command))
+	for i, c := range command {
+		args[i] = replacer.Replace(c)
+	}
+
+	cmd := exec.Command(args[0], args[1:]...)
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		fmt.Println("Error running command:", err)
+		return
+	}
+	go io.Copy(os.Stdout, stdout)
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		fmt.Println("Error running command:", err)
+		return
+	}
+	go io.Copy(os.Stderr, stderr)
+
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "(error exit: %s)\n", err)
+	}
+}
+
+func runMatching(names <-chan string, regex *regexp.Regexp, command []string) {
 	for name := range names {
-		fmt.Println(name)
+		normalized := strings.TrimPrefix(name, "./")
+		if !regex.MatchString(normalized) {
+			continue
+		}
+		go runCommand(command, normalized)
 	}
 }
 
 func main() {
+	flag.Parse()
+	regex := parseRegex()
+	command := flag.Args()
+	if len(command) == 0 {
+		Fatalln("Must give command to execute.")
+	}
+
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		Fatalln(err)
@@ -70,7 +134,7 @@ func main() {
 	rawChanges := make(chan string)
 
 	go watch(".", watcher, rawChanges, done)
-	go printNames(rawChanges)
+	go runMatching(rawChanges, regex, command)
 
 	Fatalln(<-done)
 }
