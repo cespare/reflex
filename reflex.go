@@ -62,7 +62,7 @@ func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done cha
 	for {
 		select {
 		case e := <-watcher.Event:
-			path := e.Name
+			path := strings.TrimPrefix(e.Name, "./")
 			names <- path
 			if e.IsCreate() {
 				if err := filepath.Walk(path, walker(watcher)); err != nil {
@@ -80,6 +80,8 @@ func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done cha
 	}
 }
 
+// runCommand runs the specified command, replacing {} in args with the provided filename. Blocks until the
+// command exits.
 func runCommand(command []string, path string) {
 	replacer := strings.NewReplacer("{}", path)
 	args := make([]string, len(command))
@@ -106,13 +108,19 @@ func runCommand(command []string, path string) {
 	}
 }
 
-func runMatching(names <-chan string, regex *regexp.Regexp, command []string) {
-	for name := range names {
-		normalized := strings.TrimPrefix(name, "./")
-		if !regex.MatchString(normalized) {
-			continue
+// filterMatching passes on messages matching regex.
+func filterMatching(in <-chan string, out chan<- string, regex *regexp.Regexp) {
+	for name := range in {
+		if regex.MatchString(name) {
+			out <- name
 		}
-		go runCommand(command, normalized)
+	}
+}
+
+// runEach runs the command on each name that comes through the names channel.
+func runEach(names <-chan string, command []string) {
+	for name := range names {
+		runCommand(command, name)
 	}
 }
 
@@ -132,9 +140,11 @@ func main() {
 
 	done := make(chan error)
 	rawChanges := make(chan string)
+	filtered := make(chan string)
 
 	go watch(".", watcher, rawChanges, done)
-	go runMatching(rawChanges, regex, command)
+	go filterMatching(rawChanges, filtered, regex)
+	go runEach(filtered, command)
 
 	Fatalln(<-done)
 }
