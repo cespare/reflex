@@ -43,11 +43,15 @@ type UniqueFilesBacklog struct {
 }
 
 func (b *UniqueFilesBacklog) Add(path string) {
+	defer func() { b.empty = false }()
+	if b.empty {
+		b.next = path
+		return
+	}
 	if path == b.next {
 		return
 	}
 	b.rest[path] = struct{}{}
-	b.empty = false
 }
 
 func (b *UniqueFilesBacklog) Next() string {
