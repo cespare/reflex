@@ -131,7 +131,7 @@ func filterMatching(in <-chan string, out chan<- string, regex *regexp.Regexp) {
 func batchRun(in <-chan string, out chan<- string, backlog Backlog) {
 	for name := range in {
 		backlog.Add(name)
-		timer := time.NewTimer(500 * time.Millisecond)
+		timer := time.NewTimer(200 * time.Millisecond)
 	outer:
 		for {
 			select {
