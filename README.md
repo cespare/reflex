@@ -52,3 +52,4 @@ TODO: Describe the two different batching strategies.
 * Options: specify only files or only directories.
 * Options: Allow force non-recursive / exclude a dir?
 * Options: Change the substitution symbol from {} to something else.
+* Allow for shell globbing (+recursive?) as well as regex matching.
