@@ -47,7 +47,10 @@ func Fatalln(args ...interface{}) {
 
 func walker(watcher *fsnotify.Watcher) filepath.WalkFunc {
 	return func(path string, f os.FileInfo, err error) error {
-		if !f.IsDir() {
+		if err != nil || !f.IsDir() {
+			// TODO: Is there some other thing we should be doing to handle errors? When watching large
+			// directories that have lots of programs modifying them (esp. if they're making tempfiles along the
+			// way), we often get errors.
 			return nil
 		}
 		fmt.Println("Adding watch for path", path)
