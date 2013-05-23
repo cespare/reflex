@@ -118,7 +118,7 @@ func runCommand(cmd *exec.Cmd, stdout chan<- string, stderr chan<- string) error
 			stderrErr = nil
 		case err := <-cmdErr:
 			if err != nil {
-				stderr <- fmt.Sprintf("(error exit: %s)\n", err)
+				stderr <- fmt.Sprintf("(error exit: %s)", err)
 			}
 			cmdErr = nil
 		}
