@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -151,23 +150,21 @@ func runCommand(cmd *exec.Cmd, reflexID int, stdout chan<- OutMsg, stderr chan<-
 	return nil
 }
 
-// filterMatchingRegex passes on messages matching regex.
-func filterMatchingRegex(in <-chan string, out chan<- string, regex *regexp.Regexp) {
+// filterMatching passes on messages matching the regex/glob.
+func filterMatching(in <-chan string, out chan<- string, reflex *Reflex) {
 	for name := range in {
-		if regex.MatchString(name) {
-			out <- name
+		if reflex.useRegex {
+			if !reflex.regex.MatchString(name) {
+				continue
+			}
+		} else {
+			matches, err := filepath.Match(reflex.glob, name)
+			// TODO: It would be good to notify the user on an error here.
+			if !(err == nil && matches) {
+				continue
+			}
 		}
-	}
-}
-
-// filterMatchingGlob passes on messages matching glob.
-func filterMatchingGlob(in <-chan string, out chan<- string, glob string) {
-	for name := range in {
-		matches, err := filepath.Match(glob, name)
-		// TODO: It would be good to notify the user on an error here.
-		if err == nil && matches {
-			out <- name
-		}
+		out <- name
 	}
 }
 

@@ -283,11 +283,7 @@ func main() {
 	go printOutput(stderr, os.Stderr)
 
 	for _, reflex := range reflexes {
-		if reflex.useRegex {
-			go filterMatchingRegex(reflex.rawChanges, reflex.filtered, reflex.regex)
-		} else {
-			go filterMatchingGlob(reflex.rawChanges, reflex.filtered, reflex.glob)
-		}
+		go filterMatching(reflex.rawChanges, reflex.filtered, reflex)
 		go batchRun(reflex.filtered, reflex.batched, reflex.backlog)
 		go runEach(reflex.batched, stdout, stderr, reflex)
 	}
