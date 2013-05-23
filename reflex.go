@@ -31,9 +31,10 @@ var (
 )
 
 type Config struct {
-	regex string
-	glob  string
-	start bool
+	regex     string
+	glob      string
+	subSymbol string
+	start     bool
 }
 
 func init() {
@@ -45,6 +46,8 @@ func init() {
 func registerFlags(f *flag.FlagSet, config *Config) {
 	f.StringVar(&config.regex, "r", "", "A regular expression to match filenames.")
 	f.StringVar(&config.glob, "g", "", "A shell glob expression to match filenames.")
+	f.StringVar(&config.subSymbol, "sub", defaultSubSymbol,
+		"Indicates that the command is a long-running process to be restarted on matching changes.")
 	f.BoolVar(&config.start, "s", false,
 		"Indicates that the command is a long-running process to be restarted on matching changes.")
 }
@@ -240,9 +243,9 @@ func batchRun(in <-chan string, out chan<- string, backlog Backlog) {
 
 // runEach runs the command on each name that comes through the names channel. Each {} is replaced by the name
 // of the file. The stderr and stdout of the command are passed line-by-line to the stderr and stdout chans.
-func runEach(names <-chan string, stdout chan<- string, stderr chan<- string, command []string) {
+func runEach(names <-chan string, stdout chan<- string, stderr chan<- string, command []string, subSymbol string) {
 	for name := range names {
-		replacer := strings.NewReplacer(defaultSubSymbol, name)
+		replacer := strings.NewReplacer(subSymbol, name)
 		args := make([]string, len(command))
 		for i, c := range command {
 			args[i] = replacer.Replace(c)
@@ -262,12 +265,13 @@ func printOutput(out <-chan string, writer io.Writer) {
 // This ties together a single reflex 'instance' so that multiple watches/commands can be handled together
 // easily.
 type Reflex struct {
-	start    bool
-	backlog  Backlog
-	regex    *regexp.Regexp
-	glob     string
-	useRegex bool
-	command  []string
+	start     bool
+	backlog   Backlog
+	regex     *regexp.Regexp
+	glob      string
+	useRegex  bool
+	command   []string
+	subSymbol string
 
 	done       chan error
 	rawChanges chan string
@@ -285,7 +289,7 @@ func NewReflex(regexString, globString string, command []string, start bool, sub
 	}
 
 	if subSymbol == "" {
-		subSymbol = defaultSubSymbol
+		return nil, errors.New("Substitution symbol must be non-empty.")
 	}
 
 	substitution := false
@@ -304,12 +308,13 @@ func NewReflex(regexString, globString string, command []string, start bool, sub
 	}
 
 	reflex := &Reflex{
-		start:    start,
-		backlog:  backlog,
-		regex:    regex,
-		glob:     glob,
-		useRegex: regex != nil,
-		command:  command,
+		start:     start,
+		backlog:   backlog,
+		regex:     regex,
+		glob:      glob,
+		useRegex:  regex != nil,
+		command:   command,
+		subSymbol: subSymbol,
 
 		rawChanges: make(chan string),
 		filtered:   make(chan string),
@@ -328,7 +333,12 @@ func (r *Reflex) PrintInfo(source string) {
 	} else {
 		fmt.Println("| Glob:", r.glob)
 	}
-	fmt.Println("| Command:", r.command)
+	replacer := strings.NewReplacer(r.subSymbol, "<filaname>")
+	command := make([]string, len(r.command))
+	for i, part := range r.command {
+		command[i] = replacer.Replace(part)
+	}
+	fmt.Println("| Command:", command)
 	fmt.Println("+---------")
 }
 
@@ -340,7 +350,7 @@ func main() {
 	reflexes := []*Reflex{}
 
 	if flagConf == "" {
-		reflex, err := NewReflex(globalConfig.regex, globalConfig.glob, globalFlags.Args(), false, "")
+		reflex, err := NewReflex(globalConfig.regex, globalConfig.glob, globalFlags.Args(), false, globalConfig.subSymbol)
 		if err != nil {
 			Fatalln(err)
 		}
@@ -375,7 +385,7 @@ func main() {
 			if err := flags.Parse(parts); err != nil {
 				Fatalln(errorMsg, err)
 			}
-			reflex, err := NewReflex(config.regex, config.glob, flags.Args(), false, "")
+			reflex, err := NewReflex(config.regex, config.glob, flags.Args(), false, config.subSymbol)
 			if err != nil {
 				Fatalln(errorMsg, err)
 			}
@@ -416,7 +426,7 @@ func main() {
 			go filterMatchingGlob(reflex.rawChanges, reflex.filtered, reflex.glob)
 		}
 		go batchRun(reflex.filtered, reflex.batched, reflex.backlog)
-		go runEach(reflex.batched, stdout, stderr, reflex.command)
+		go runEach(reflex.batched, stdout, stderr, reflex.command, reflex.subSymbol)
 	}
 
 	Fatalln(<-done)

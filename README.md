@@ -52,9 +52,9 @@ TODO: Describe the two different batching strategies.
 * Handle the inverse (restart) case, for servers.
 * Options: specify only files or only directories.
 * Options: Allow force non-recursive / exclude a dir?
-* Options: Change the substitution symbol from {} to something else.
 * Implement recursive globbing.
 * Allow for choosing between executing commands concurrently (faster) or sequentially (no interleaved output)
 * Color each commands output command differently (good if we allow interleaved output).
 * Document file argument list splitting behavior (with go-shellquote)
 * Implement/copy the parts of go-shellquote that I need myself.
+* Add more debugging info to -d.
