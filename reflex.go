@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/howeyc/fsnotify"
+	"github.com/kballard/go-shellquote"
 )
 
 const (
@@ -24,6 +25,7 @@ var (
 	matchAll = regexp.MustCompile(".*")
 
 	flagConf     string
+	verbose      bool
 	globalFlags  = flag.NewFlagSet("", flag.ContinueOnError)
 	globalConfig = &Config{}
 )
@@ -35,6 +37,7 @@ type Config struct {
 
 func init() {
 	globalFlags.StringVar(&flagConf, "c", "", "A configuration file that describes how to run reflex.")
+	globalFlags.BoolVar(&verbose, "v", false, "Verbose mode: print out more information about what reflex is doing.")
 	registerFlags(globalFlags, globalConfig)
 }
 
@@ -46,7 +49,6 @@ func registerFlags(f *flag.FlagSet, config *Config) {
 
 func parseRegex(s string) *regexp.Regexp {
 	if s == "" {
-		fmt.Println("Warning: no regex given (-r), so matching all file changes.")
 		return matchAll
 	}
 
@@ -294,6 +296,17 @@ func NewReflex(regexString string, command []string, start bool, subSymbol strin
 	return reflex, nil
 }
 
+func (r *Reflex) PrintInfo(source string) {
+	fmt.Println("Reflex from", source)
+	if r.regex == matchAll {
+		fmt.Println("| No regex given (-r), so matching all file changes.")
+	} else {
+		fmt.Println("| Regex:", r.regex)
+	}
+	fmt.Println("| Command:", r.command)
+	fmt.Println("+---------")
+}
+
 func main() {
 	if err := globalFlags.Parse(os.Args[1:]); err != nil {
 		Fatalln(err)
@@ -301,7 +314,16 @@ func main() {
 
 	reflexes := []*Reflex{}
 
-	if flagConf != "" {
+	if flagConf == "" {
+		reflex, err := NewReflex(globalConfig.regex, globalFlags.Args(), false, "")
+		if err != nil {
+			Fatalln(err)
+		}
+		if verbose {
+			reflex.PrintInfo("commandline")
+		}
+		reflexes = append(reflexes, reflex)
+	} else {
 		if flag.NFlag() > 1 {
 			Fatalln("Cannot set other flags along with -c.")
 		}
@@ -310,33 +332,36 @@ func main() {
 			Fatalln(err)
 		}
 		scanner := bufio.NewScanner(configFile)
+		lineNo := 0
 		for scanner.Scan() {
+			lineNo++
+			errorMsg := fmt.Sprintf("Error on line: %d", lineNo)
 			config := &Config{}
 			flags := flag.NewFlagSet("", flag.ContinueOnError)
 			registerFlags(flags, config)
-			parts := strings.Fields(scanner.Text())
-			if len(parts) > 0 && strings.HasPrefix(parts[0], "#") {
-				// Skip comments (lines starting with #).
+			parts, err := shellquote.Split(scanner.Text())
+			if err != nil {
+				Fatalln(errorMsg, err)
+			}
+			// Skip empty lines and comments (lines starting with #).
+			if len(parts) == 0 || strings.HasPrefix(parts[0], "#") {
 				continue
 			}
 			if err := flags.Parse(parts); err != nil {
-				Fatalln(err)
+				Fatalln(errorMsg, err)
 			}
 			reflex, err := NewReflex(config.regex, flags.Args(), false, "")
 			if err != nil {
-				Fatalln(err)
+				Fatalln(errorMsg, err)
+			}
+			if verbose {
+				reflex.PrintInfo(fmt.Sprintf("%s, line %d", flagConf, lineNo))
 			}
 			reflexes = append(reflexes, reflex)
 		}
 		if err := scanner.Err(); err != nil {
 			Fatalln(err)
 		}
-	} else {
-		reflex, err := NewReflex(globalConfig.regex, globalFlags.Args(), false, "")
-		if err != nil {
-			Fatalln(err)
-		}
-		reflexes = append(reflexes, reflex)
 	}
 
 	watcher, err := fsnotify.NewWatcher()

@@ -6,8 +6,8 @@ Reflex is a small tool to watch a directory and rerun a command when certain fil
 
     $ go get github.com/cespare/reflex
 
-Note that this has one dependency outside of the go standard library: `github.com/howeyc/fsnotify`. `go get`
-will automatically fetch it for you.
+Note that this has some dependencies outside of the Go standard library. You'll need git installed, and `go
+get` will automatically fetch them for you.
 
 ## Usage
 
@@ -54,4 +54,5 @@ TODO: Describe the two different batching strategies.
 * Allow for shell globbing (+recursive?) as well as regex matching.
 * Allow for choosing between executing commands concurrently (faster) or sequentially (no interleaved output)
 * Color each commands output command differently (good if we allow interleaved output).
-* Add a -v (verbose) mode to print out what it's doing.
+* Document file argument list splitting behavior (with go-shellquote)
+* Implement/copy the parts of go-shellquote that I need myself.
