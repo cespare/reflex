@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"flag"
 	"fmt"
@@ -22,13 +23,25 @@ const (
 var (
 	matchAll = regexp.MustCompile(".*")
 
-	flagRegex string
-	flagStart bool
+	flagConf     string
+	globalFlags  = flag.NewFlagSet("", flag.ContinueOnError)
+	globalConfig = &Config{}
 )
 
+type Config struct {
+	regex string
+	start bool
+}
+
 func init() {
-	flag.StringVar(&flagRegex, "r", "", "The regular expression to match filenames.")
-	flag.BoolVar(&flagStart, "s", false, "Indicates that the command is a long-running process to be restarted on matching changes.")
+	globalFlags.StringVar(&flagConf, "c", "", "A configuration file that describes how to run reflex.")
+	registerFlags(globalFlags, globalConfig)
+}
+
+func registerFlags(f *flag.FlagSet, config *Config) {
+	f.StringVar(&config.regex, "r", "", "The regular expression to match filenames.")
+	f.BoolVar(&config.start, "s", false,
+		"Indicates that the command is a long-running process to be restarted on matching changes.")
 }
 
 func parseRegex(s string) *regexp.Regexp {
@@ -100,32 +113,69 @@ func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done cha
 	}
 }
 
-// runCommand runs the specified command, replacing {} in args with the provided filename. Blocks until the
-// command exits.
-func runCommand(command []string, path string) {
-	replacer := strings.NewReplacer(defaultSubSymbol, path)
-	args := make([]string, len(command))
-	for i, c := range command {
-		args[i] = replacer.Replace(c)
+// runCommand runs the given Command. Blocks until the command exits. All output is passed line-by-line to the
+// stderr/stdout channels.
+func runCommand(cmd *exec.Cmd, stdout chan<- string, stderr chan<- string) error {
+	cmdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	cmderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
 	}
 
-	cmd := exec.Command(args[0], args[1:]...)
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		fmt.Println("Error running command:", err)
-		return
+	if err := cmd.Start(); err != nil {
+		return err
 	}
-	go io.Copy(os.Stdout, stdout)
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		fmt.Println("Error running command:", err)
-		return
-	}
-	go io.Copy(os.Stderr, stderr)
 
-	if err := cmd.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "(error exit: %s)\n", err)
+	stdoutErr := make(chan error)
+	go func() {
+		scanner := bufio.NewScanner(cmdout)
+		for scanner.Scan() {
+			stdout <- scanner.Text()
+		}
+		stdoutErr <- scanner.Err()
+	}()
+
+	stderrErr := make(chan error)
+	go func() {
+		scanner := bufio.NewScanner(cmderr)
+		for scanner.Scan() {
+			stderr <- scanner.Text()
+		}
+		stderrErr <- scanner.Err()
+	}()
+
+	cmdErr := make(chan error)
+	go func() {
+		cmdErr <- cmd.Wait()
+	}()
+
+	for {
+		select {
+		case err := <-stdoutErr:
+			if err != nil {
+				return err
+			}
+			stdoutErr = nil
+		case err := <-stderrErr:
+			if err != nil {
+				return err
+			}
+			stderrErr = nil
+		case err := <-cmdErr:
+			if err != nil {
+				stderr <- fmt.Sprintf("(error exit: %s)\n", err)
+			}
+			cmdErr = nil
+		}
+		if stdoutErr == nil && stderrErr == nil && cmdErr == nil {
+			break
+		}
 	}
+
+	return nil
 }
 
 // filterMatching passes on messages matching regex.
@@ -168,10 +218,24 @@ func batchRun(in <-chan string, out chan<- string, backlog Backlog) {
 	}
 }
 
-// runEach runs the command on each name that comes through the names channel.
-func runEach(names <-chan string, command []string) {
+// runEach runs the command on each name that comes through the names channel. Each {} is replaced by the name
+// of the file. The stderr and stdout of the command are passed line-by-line to the stderr and stdout chans.
+func runEach(names <-chan string, stdout chan<- string, stderr chan<- string, command []string) {
 	for name := range names {
-		runCommand(command, name)
+		replacer := strings.NewReplacer(defaultSubSymbol, name)
+		args := make([]string, len(command))
+		for i, c := range command {
+			args[i] = replacer.Replace(c)
+		}
+		cmd := exec.Command(args[0], args[1:]...)
+
+		runCommand(cmd, stdout, stderr)
+	}
+}
+
+func printOutput(out <-chan string, writer io.Writer) {
+	for line := range out {
+		fmt.Fprintln(writer, line)
 	}
 }
 
@@ -231,12 +295,49 @@ func NewReflex(regexString string, command []string, start bool, subSymbol strin
 }
 
 func main() {
-	flag.Parse()
-	reflex, err := NewReflex(flagRegex, flag.Args(), false, "")
-	if err != nil {
+	if err := globalFlags.Parse(os.Args[1:]); err != nil {
 		Fatalln(err)
 	}
-	reflexes := []*Reflex{reflex}
+
+	reflexes := []*Reflex{}
+
+	if flagConf != "" {
+		if flag.NFlag() > 1 {
+			Fatalln("Cannot set other flags along with -c.")
+		}
+		configFile, err := os.Open(flagConf)
+		if err != nil {
+			Fatalln(err)
+		}
+		scanner := bufio.NewScanner(configFile)
+		for scanner.Scan() {
+			config := &Config{}
+			flags := flag.NewFlagSet("", flag.ContinueOnError)
+			registerFlags(flags, config)
+			parts := strings.Fields(scanner.Text())
+			if len(parts) > 0 && strings.HasPrefix(parts[0], "#") {
+				// Skip comments (lines starting with #).
+				continue
+			}
+			if err := flags.Parse(parts); err != nil {
+				Fatalln(err)
+			}
+			reflex, err := NewReflex(config.regex, flags.Args(), false, "")
+			if err != nil {
+				Fatalln(err)
+			}
+			reflexes = append(reflexes, reflex)
+		}
+		if err := scanner.Err(); err != nil {
+			Fatalln(err)
+		}
+	} else {
+		reflex, err := NewReflex(globalConfig.regex, globalFlags.Args(), false, "")
+		if err != nil {
+			Fatalln(err)
+		}
+		reflexes = append(reflexes, reflex)
+	}
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -253,10 +354,15 @@ func main() {
 	go watch(".", watcher, rawChanges, done)
 	go broadcast(rawChanges, allRawChanges)
 
+	stdout := make(chan string, 100)
+	stderr := make(chan string, 100)
+	go printOutput(stdout, os.Stdout)
+	go printOutput(stderr, os.Stderr)
+
 	for _, reflex := range reflexes {
 		go filterMatching(reflex.rawChanges, reflex.filtered, reflex.regex)
 		go batchRun(reflex.filtered, reflex.batched, reflex.backlog)
-		go runEach(reflex.batched, reflex.command)
+		go runEach(reflex.batched, stdout, stderr, reflex.command)
 	}
 
 	Fatalln(<-done)

@@ -48,7 +48,6 @@ TODO: Describe the two different batching strategies.
 
 * Check that I'm handling command failure well.
 * Handle the inverse (restart) case, for servers.
-* Accept a config file (like Guardfile, but much simpler). Just a list of regexes + commands.
 * Options: specify only files or only directories.
 * Options: Allow force non-recursive / exclude a dir?
 * Options: Change the substitution symbol from {} to something else.
