@@ -57,4 +57,4 @@ TODO: Describe the two different batching strategies.
 * Color each commands output command differently (good if we allow interleaved output).
 * Document file argument list splitting behavior (with go-shellquote)
 * Implement/copy the parts of go-shellquote that I need myself.
-* Add more debugging info to -d.
+* Add more debugging info to -v.
