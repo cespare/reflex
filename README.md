@@ -18,6 +18,8 @@ get` will automatically fetch them for you.
 * `-h`: Display the help
 * `-r REGEX`: A [Go regular expression](http://golang.org/pkg/regexp/) to match paths.
 
+TODO: fill out all the options after this has settled down a bit.
+
 `COMMAND` is any command you'd like to run. Any instance of `{}` will be replaced with the filename of changed
 file.
 
@@ -51,7 +53,7 @@ TODO: Describe the two different batching strategies.
 * Options: specify only files or only directories.
 * Options: Allow force non-recursive / exclude a dir?
 * Options: Change the substitution symbol from {} to something else.
-* Allow for shell globbing (+recursive?) as well as regex matching.
+* Implement recursive globbing.
 * Allow for choosing between executing commands concurrently (faster) or sequentially (no interleaved output)
 * Color each commands output command differently (good if we allow interleaved output).
 * Document file argument list splitting behavior (with go-shellquote)

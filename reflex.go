@@ -32,6 +32,7 @@ var (
 
 type Config struct {
 	regex string
+	glob  string
 	start bool
 }
 
@@ -42,21 +43,27 @@ func init() {
 }
 
 func registerFlags(f *flag.FlagSet, config *Config) {
-	f.StringVar(&config.regex, "r", "", "The regular expression to match filenames.")
+	f.StringVar(&config.regex, "r", "", "A regular expression to match filenames.")
+	f.StringVar(&config.glob, "g", "", "A shell glob expression to match filenames.")
 	f.BoolVar(&config.start, "s", false,
 		"Indicates that the command is a long-running process to be restarted on matching changes.")
 }
 
-func parseRegex(s string) *regexp.Regexp {
-	if s == "" {
-		return matchAll
+func parseMatchers(rs, gs string) (regex *regexp.Regexp, glob string, err error) {
+	if rs == "" && gs == "" {
+		return matchAll, "", nil
 	}
-
-	r, err := regexp.Compile(s)
-	if err != nil {
-		Fatalln("Bad regular expression provided.\n" + err.Error())
+	if rs == "" {
+		return nil, gs, nil
 	}
-	return r
+	if gs == "" {
+		regex, err := regexp.Compile(rs)
+		if err != nil {
+			return nil, "", err
+		}
+		return regex, "", nil
+	}
+	return nil, "", errors.New("Both regex and glob specified.")
 }
 
 func Fatalln(args ...interface{}) {
@@ -180,10 +187,21 @@ func runCommand(cmd *exec.Cmd, stdout chan<- string, stderr chan<- string) error
 	return nil
 }
 
-// filterMatching passes on messages matching regex.
-func filterMatching(in <-chan string, out chan<- string, regex *regexp.Regexp) {
+// filterMatchingRegex passes on messages matching regex.
+func filterMatchingRegex(in <-chan string, out chan<- string, regex *regexp.Regexp) {
 	for name := range in {
 		if regex.MatchString(name) {
+			out <- name
+		}
+	}
+}
+
+// filterMatchingGlob passes on messages matching glob.
+func filterMatchingGlob(in <-chan string, out chan<- string, glob string) {
+	for name := range in {
+		matches, err := filepath.Match(glob, name)
+		// TODO: It would be good to notify the user on an error here.
+		if err == nil && matches {
 			out <- name
 		}
 	}
@@ -244,11 +262,12 @@ func printOutput(out <-chan string, writer io.Writer) {
 // This ties together a single reflex 'instance' so that multiple watches/commands can be handled together
 // easily.
 type Reflex struct {
-	start   bool
-	backlog Backlog
-	regex   *regexp.Regexp
-	glob    string
-	command []string
+	start    bool
+	backlog  Backlog
+	regex    *regexp.Regexp
+	glob     string
+	useRegex bool
+	command  []string
 
 	done       chan error
 	rawChanges chan string
@@ -256,8 +275,11 @@ type Reflex struct {
 	batched    chan string
 }
 
-func NewReflex(regexString string, command []string, start bool, subSymbol string) (*Reflex, error) {
-	regex := parseRegex(regexString)
+func NewReflex(regexString, globString string, command []string, start bool, subSymbol string) (*Reflex, error) {
+	regex, glob, err := parseMatchers(regexString, globString)
+	if err != nil {
+		Fatalln("Error parsing glob/regex.\n" + err.Error())
+	}
 	if len(command) == 0 {
 		return nil, errors.New("Must give command to execute.")
 	}
@@ -282,11 +304,12 @@ func NewReflex(regexString string, command []string, start bool, subSymbol strin
 	}
 
 	reflex := &Reflex{
-		start:   start,
-		backlog: backlog,
-		regex:   regex,
-		glob:    "",
-		command: command,
+		start:    start,
+		backlog:  backlog,
+		regex:    regex,
+		glob:     glob,
+		useRegex: regex != nil,
+		command:  command,
 
 		rawChanges: make(chan string),
 		filtered:   make(chan string),
@@ -299,9 +322,11 @@ func NewReflex(regexString string, command []string, start bool, subSymbol strin
 func (r *Reflex) PrintInfo(source string) {
 	fmt.Println("Reflex from", source)
 	if r.regex == matchAll {
-		fmt.Println("| No regex given (-r), so matching all file changes.")
-	} else {
+		fmt.Println("| No regex (-r) or glob (-g) given, so matching all file changes.")
+	} else if r.useRegex {
 		fmt.Println("| Regex:", r.regex)
+	} else {
+		fmt.Println("| Glob:", r.glob)
 	}
 	fmt.Println("| Command:", r.command)
 	fmt.Println("+---------")
@@ -315,7 +340,7 @@ func main() {
 	reflexes := []*Reflex{}
 
 	if flagConf == "" {
-		reflex, err := NewReflex(globalConfig.regex, globalFlags.Args(), false, "")
+		reflex, err := NewReflex(globalConfig.regex, globalConfig.glob, globalFlags.Args(), false, "")
 		if err != nil {
 			Fatalln(err)
 		}
@@ -350,7 +375,7 @@ func main() {
 			if err := flags.Parse(parts); err != nil {
 				Fatalln(errorMsg, err)
 			}
-			reflex, err := NewReflex(config.regex, flags.Args(), false, "")
+			reflex, err := NewReflex(config.regex, config.glob, flags.Args(), false, "")
 			if err != nil {
 				Fatalln(errorMsg, err)
 			}
@@ -385,7 +410,11 @@ func main() {
 	go printOutput(stderr, os.Stderr)
 
 	for _, reflex := range reflexes {
-		go filterMatching(reflex.rawChanges, reflex.filtered, reflex.regex)
+		if reflex.useRegex {
+			go filterMatchingRegex(reflex.rawChanges, reflex.filtered, reflex.regex)
+		} else {
+			go filterMatchingGlob(reflex.rawChanges, reflex.filtered, reflex.glob)
+		}
 		go batchRun(reflex.filtered, reflex.batched, reflex.backlog)
 		go runEach(reflex.batched, stdout, stderr, reflex.command)
 	}
