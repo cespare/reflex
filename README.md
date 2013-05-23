@@ -53,3 +53,5 @@ TODO: Describe the two different batching strategies.
 * Options: Allow force non-recursive / exclude a dir?
 * Options: Change the substitution symbol from {} to something else.
 * Allow for shell globbing (+recursive?) as well as regex matching.
+* Allow for choosing between executing commands concurrently (faster) or sequentially (no interleaved output)
+* Color each commands output command differently (good if we allow interleaved output).
