@@ -3,14 +3,14 @@ package main
 import (
 	"bufio"
 	"errors"
-	"flag"
 	"fmt"
 	"os"
 	"regexp"
 	"strings"
 
-	"github.com/kballard/go-shellquote"
 	"github.com/howeyc/fsnotify"
+	"github.com/kballard/go-shellquote"
+	flag "github.com/ogier/pflag"
 )
 
 const (
@@ -34,18 +34,19 @@ type Config struct {
 }
 
 func init() {
-	globalFlags.StringVar(&flagConf, "c", "", "A configuration file that describes how to run reflex.")
-	globalFlags.BoolVar(&verbose, "v", false, "Verbose mode: print out more information about what reflex is doing.")
+	globalFlags.StringVarP(&flagConf, "config", "c", "", "A configuration file that describes how to run reflex.")
+	globalFlags.BoolVarP(&verbose,
+		"verbose", "v", false, "Verbose mode: print out more information about what reflex is doing.")
 	registerFlags(globalFlags, globalConfig)
 }
 
 func registerFlags(f *flag.FlagSet, config *Config) {
-	f.StringVar(&config.regex, "r", "", "A regular expression to match filenames.")
-	f.StringVar(&config.glob, "g", "", "A shell glob expression to match filenames.")
-	f.StringVar(&config.subSymbol, "sub", defaultSubSymbol,
+	f.StringVarP(&config.regex, "regex", "r", "", "A regular expression to match filenames.")
+	f.StringVarP(&config.glob, "glob", "g", "", "A shell glob expression to match filenames.")
+	f.StringVarP(&config.subSymbol, "substitute", "u", defaultSubSymbol,
 		"Indicates that the command is a long-running process to be restarted on matching changes.")
-	f.BoolVar(&config.start, "s", false,
-		"Indicates that the command is a long-running process to be restarted on matching changes.")
+	f.BoolVarP(&config.start, "start", "s", false,
+		"The substitution symbol that is replaced with the filename in a command.")
 }
 
 func parseMatchers(rs, gs string) (regex *regexp.Regexp, glob string, err error) {
