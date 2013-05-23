@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -15,25 +16,28 @@ import (
 )
 
 const (
-	subSymbol = "{}"
+	defaultSubSymbol = "{}"
 )
 
 var (
-	regexString string
-	matchAll    = regexp.MustCompile(".*")
+	matchAll = regexp.MustCompile(".*")
+
+	flagRegex string
+	flagStart bool
 )
 
 func init() {
-	flag.StringVar(&regexString, "r", "", "The regular expression to match filenames.")
+	flag.StringVar(&flagRegex, "r", "", "The regular expression to match filenames.")
+	flag.BoolVar(&flagStart, "s", false, "Indicates that the command is a long-running process to be restarted on matching changes.")
 }
 
-func parseRegex() *regexp.Regexp {
-	if regexString == "" {
+func parseRegex(s string) *regexp.Regexp {
+	if s == "" {
 		fmt.Println("Warning: no regex given (-r), so matching all file changes.")
 		return matchAll
 	}
 
-	r, err := regexp.Compile(regexString)
+	r, err := regexp.Compile(s)
 	if err != nil {
 		Fatalln("Bad regular expression provided.\n" + err.Error())
 	}
@@ -59,6 +63,14 @@ func walker(watcher *fsnotify.Watcher) filepath.WalkFunc {
 			fmt.Printf("Error while watching new path %s: %s\n", path, err)
 		}
 		return nil
+	}
+}
+
+func broadcast(in <-chan string, outs []chan<- string) {
+	for e := range in {
+		for _, out := range outs {
+			out <- e
+		}
 	}
 }
 
@@ -91,7 +103,7 @@ func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done cha
 // runCommand runs the specified command, replacing {} in args with the provided filename. Blocks until the
 // command exits.
 func runCommand(command []string, path string) {
-	replacer := strings.NewReplacer(subSymbol, path)
+	replacer := strings.NewReplacer(defaultSubSymbol, path)
 	args := make([]string, len(command))
 	for i, c := range command {
 		args[i] = replacer.Replace(c)
@@ -163,13 +175,31 @@ func runEach(names <-chan string, command []string) {
 	}
 }
 
-func main() {
-	flag.Parse()
-	regex := parseRegex()
-	command := flag.Args()
+// This ties together a single reflex 'instance' so that multiple watches/commands can be handled together
+// easily.
+type Reflex struct {
+	start   bool
+	backlog Backlog
+	regex   *regexp.Regexp
+	glob    string
+	command []string
+
+	done       chan error
+	rawChanges chan string
+	filtered   chan string
+	batched    chan string
+}
+
+func NewReflex(regexString string, command []string, start bool, subSymbol string) (*Reflex, error) {
+	regex := parseRegex(regexString)
 	if len(command) == 0 {
-		Fatalln("Must give command to execute.")
+		return nil, errors.New("Must give command to execute.")
 	}
+
+	if subSymbol == "" {
+		subSymbol = defaultSubSymbol
+	}
+
 	substitution := false
 	for _, part := range command {
 		if strings.Contains(part, subSymbol) {
@@ -177,6 +207,7 @@ func main() {
 			break
 		}
 	}
+
 	var backlog Backlog
 	if substitution {
 		backlog = &UniqueFilesBacklog{true, "", make(map[string]struct{})}
@@ -184,21 +215,49 @@ func main() {
 		backlog = new(UnifiedBacklog)
 	}
 
+	reflex := &Reflex{
+		start:   start,
+		backlog: backlog,
+		regex:   regex,
+		glob:    "",
+		command: command,
+
+		rawChanges: make(chan string),
+		filtered:   make(chan string),
+		batched:    make(chan string),
+	}
+
+	return reflex, nil
+}
+
+func main() {
+	flag.Parse()
+	reflex, err := NewReflex(flagRegex, flag.Args(), false, "")
+	if err != nil {
+		Fatalln(err)
+	}
+	reflexes := []*Reflex{reflex}
+
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		Fatalln(err)
 	}
 	defer watcher.Close()
 
-	done := make(chan error)
 	rawChanges := make(chan string)
-	filtered := make(chan string)
-	batched := make(chan string)
-
+	allRawChanges := make([]chan<- string, len(reflexes))
+	done := make(chan error)
+	for i, reflex := range reflexes {
+		allRawChanges[i] = reflex.rawChanges
+	}
 	go watch(".", watcher, rawChanges, done)
-	go filterMatching(rawChanges, filtered, regex)
-	go batchRun(filtered, batched, backlog)
-	go runEach(batched, command)
+	go broadcast(rawChanges, allRawChanges)
+
+	for _, reflex := range reflexes {
+		go filterMatching(reflex.rawChanges, reflex.filtered, reflex.regex)
+		go batchRun(reflex.filtered, reflex.batched, reflex.backlog)
+		go runEach(reflex.batched, reflex.command)
+	}
 
 	Fatalln(<-done)
 }
