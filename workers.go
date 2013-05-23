@@ -19,6 +19,17 @@ var (
 	seqCommands = &sync.Mutex{}
 )
 
+type OutMsg struct {
+	reflexID int
+	message  string
+}
+
+const (
+	// ANSI colors -- using 32 - 36
+	colorStart = 32
+	numColors  = 5
+)
+
 func walker(watcher *fsnotify.Watcher) filepath.WalkFunc {
 	return func(path string, f os.FileInfo, err error) error {
 		if err != nil || !f.IsDir() {
@@ -72,7 +83,7 @@ func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done cha
 
 // runCommand runs the given Command. Blocks until the command exits. All output is passed line-by-line to the
 // stderr/stdout channels.
-func runCommand(cmd *exec.Cmd, stdout chan<- string, stderr chan<- string) error {
+func runCommand(cmd *exec.Cmd, reflexID int, stdout chan<- OutMsg, stderr chan<- OutMsg) error {
 	if flagSequential {
 		seqCommands.Lock()
 		defer seqCommands.Unlock()
@@ -95,7 +106,7 @@ func runCommand(cmd *exec.Cmd, stdout chan<- string, stderr chan<- string) error
 	go func() {
 		scanner := bufio.NewScanner(cmdout)
 		for scanner.Scan() {
-			stdout <- scanner.Text()
+			stdout <- OutMsg{reflexID, scanner.Text()}
 		}
 		stdoutErr <- scanner.Err()
 	}()
@@ -104,7 +115,7 @@ func runCommand(cmd *exec.Cmd, stdout chan<- string, stderr chan<- string) error
 	go func() {
 		scanner := bufio.NewScanner(cmderr)
 		for scanner.Scan() {
-			stderr <- scanner.Text()
+			stderr <- OutMsg{reflexID, scanner.Text()}
 		}
 		stderrErr <- scanner.Err()
 	}()
@@ -128,7 +139,7 @@ func runCommand(cmd *exec.Cmd, stdout chan<- string, stderr chan<- string) error
 			stderrErr = nil
 		case err := <-cmdErr:
 			if err != nil {
-				stderr <- fmt.Sprintf("(error exit: %s)", err)
+				stderr <- OutMsg{reflexID, fmt.Sprintf("(error exit: %s)", err)}
 			}
 			cmdErr = nil
 		}
@@ -193,21 +204,31 @@ func batchRun(in <-chan string, out chan<- string, backlog Backlog) {
 
 // runEach runs the command on each name that comes through the names channel. Each {} is replaced by the name
 // of the file. The stderr and stdout of the command are passed line-by-line to the stderr and stdout chans.
-func runEach(names <-chan string, stdout chan<- string, stderr chan<- string, command []string, subSymbol string) {
+func runEach(names <-chan string, stdout chan<- OutMsg, stderr chan<- OutMsg, reflex *Reflex) {
 	for name := range names {
-		replacer := strings.NewReplacer(subSymbol, name)
-		args := make([]string, len(command))
-		for i, c := range command {
+		replacer := strings.NewReplacer(reflex.subSymbol, name)
+		args := make([]string, len(reflex.command))
+		for i, c := range reflex.command {
 			args[i] = replacer.Replace(c)
 		}
 		cmd := exec.Command(args[0], args[1:]...)
 
-		runCommand(cmd, stdout, stderr)
+		runCommand(cmd, reflex.id, stdout, stderr)
 	}
 }
 
-func printOutput(out <-chan string, writer io.Writer) {
-	for line := range out {
-		fmt.Fprintln(writer, line)
+func printOutput(out <-chan OutMsg, writer io.Writer) {
+	for msg := range out {
+		if decoration == DecorationFancy {
+			color := (msg.reflexID % numColors) + colorStart
+			fmt.Fprintf(writer, "\x1b[01;%dm[%02d] ", color, msg.reflexID)
+		} else if decoration == DecorationPlain {
+			fmt.Fprintf(writer, "[%02d] ", msg.reflexID)
+		}
+		fmt.Fprint(writer, msg.message)
+		if decoration == DecorationFancy {
+			fmt.Fprintf(writer, "\x1b[m")
+		}
+		fmt.Fprintln(writer)
 	}
 }

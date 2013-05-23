@@ -17,14 +17,26 @@ const (
 	defaultSubSymbol = "{}"
 )
 
+type Decoration int
+
+const (
+	DecorationNone = iota
+	DecorationPlain
+	DecorationFancy
+)
+
 var (
 	matchAll = regexp.MustCompile(".*")
 
 	flagConf       string
 	flagSequential bool
+	flagDecoration string
+	decoration     Decoration
 	verbose        bool
 	globalFlags    = flag.NewFlagSet("", flag.ContinueOnError)
 	globalConfig   = &Config{}
+
+	reflexID = 0
 )
 
 type Config struct {
@@ -40,6 +52,8 @@ func init() {
 		"verbose", "v", false, "Verbose mode: print out more information about what reflex is doing.")
 	globalFlags.BoolVarP(&flagSequential,
 		"sequential", "e", false, "Don't run multiple commands at the same time.")
+	globalFlags.StringVarP(&flagDecoration,
+		"decoration", "d", "plain", "How to decorate command stderr/stdout. Choices: none, plain, fancy.")
 	registerFlags(globalFlags, globalConfig)
 }
 
@@ -55,7 +69,7 @@ func registerFlags(f *flag.FlagSet, config *Config) {
 func anyNonGlobalsRegistered() bool {
 	any := false
 	walkFn := func(f *flag.Flag) {
-		if !(f.Name == "config" || f.Name == "verbose" || f.Name == "sequential") {
+		if !(f.Name == "config" || f.Name == "verbose" || f.Name == "sequential" || f.Name == "decoration") {
 			any = any || true
 		}
 	}
@@ -88,6 +102,7 @@ func Fatalln(args ...interface{}) {
 // This ties together a single reflex 'instance' so that multiple watches/commands can be handled together
 // easily.
 type Reflex struct {
+	id        int
 	start     bool
 	backlog   Backlog
 	regex     *regexp.Regexp
@@ -102,6 +117,7 @@ type Reflex struct {
 	batched    chan string
 }
 
+// This function is not threadsafe.
 func NewReflex(regexString, globString string, command []string, start bool, subSymbol string) (*Reflex, error) {
 	regex, glob, err := parseMatchers(regexString, globString)
 	if err != nil {
@@ -131,6 +147,7 @@ func NewReflex(regexString, globString string, command []string, start bool, sub
 	}
 
 	reflex := &Reflex{
+		id:        reflexID,
 		start:     start,
 		backlog:   backlog,
 		regex:     regex,
@@ -143,6 +160,7 @@ func NewReflex(regexString, globString string, command []string, start bool, sub
 		filtered:   make(chan string),
 		batched:    make(chan string),
 	}
+	reflexID++
 
 	return reflex, nil
 }
@@ -181,6 +199,16 @@ func main() {
 	if verbose {
 		printGlobals()
 	}
+	switch strings.ToLower(flagDecoration) {
+	case "none":
+		decoration = DecorationNone
+	case "plain":
+		decoration = DecorationPlain
+	case "fancy":
+		decoration = DecorationFancy
+	default:
+		Fatalln(fmt.Sprintf("Invalid decoration %s. Choices: none, plain, fancy.", flagDecoration))
+	}
 
 	reflexes := []*Reflex{}
 
@@ -195,7 +223,7 @@ func main() {
 		reflexes = append(reflexes, reflex)
 	} else {
 		if anyNonGlobalsRegistered() {
-			Fatalln("Cannot set other flags along with --config other than --sequential or --verbose.")
+			Fatalln("Cannot set other flags along with --config other than --sequential, --verbose, and --decoration.")
 		}
 		configFile, err := os.Open(flagConf)
 		if err != nil {
@@ -249,8 +277,8 @@ func main() {
 	go watch(".", watcher, rawChanges, done)
 	go broadcast(rawChanges, allRawChanges)
 
-	stdout := make(chan string, 100)
-	stderr := make(chan string, 100)
+	stdout := make(chan OutMsg, 100)
+	stderr := make(chan OutMsg, 100)
 	go printOutput(stdout, os.Stdout)
 	go printOutput(stderr, os.Stderr)
 
@@ -261,7 +289,7 @@ func main() {
 			go filterMatchingGlob(reflex.rawChanges, reflex.filtered, reflex.glob)
 		}
 		go batchRun(reflex.filtered, reflex.batched, reflex.backlog)
-		go runEach(reflex.batched, stdout, stderr, reflex.command, reflex.subSymbol)
+		go runEach(reflex.batched, stdout, stderr, reflex)
 	}
 
 	Fatalln(<-done)
