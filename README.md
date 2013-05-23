@@ -58,3 +58,4 @@ TODO: Describe the two different batching strategies.
 * Implement/copy the parts of go-shellquote that I need myself.
 * Add more debugging info to -v.
 * Consider vendoring all the deps.
+* Clean up the readme when the interface has settled down.
