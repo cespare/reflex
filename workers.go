@@ -9,9 +9,14 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/howeyc/fsnotify"
+)
+
+var (
+	seqCommands = &sync.Mutex{}
 )
 
 func walker(watcher *fsnotify.Watcher) filepath.WalkFunc {
@@ -68,6 +73,11 @@ func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done cha
 // runCommand runs the given Command. Blocks until the command exits. All output is passed line-by-line to the
 // stderr/stdout channels.
 func runCommand(cmd *exec.Cmd, stdout chan<- string, stderr chan<- string) error {
+	if flagSequential {
+		seqCommands.Lock()
+		defer seqCommands.Unlock()
+	}
+
 	cmdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err

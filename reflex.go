@@ -20,10 +20,11 @@ const (
 var (
 	matchAll = regexp.MustCompile(".*")
 
-	flagConf     string
-	verbose      bool
-	globalFlags  = flag.NewFlagSet("", flag.ContinueOnError)
-	globalConfig = &Config{}
+	flagConf       string
+	flagSequential bool
+	verbose        bool
+	globalFlags    = flag.NewFlagSet("", flag.ContinueOnError)
+	globalConfig   = &Config{}
 )
 
 type Config struct {
@@ -37,6 +38,8 @@ func init() {
 	globalFlags.StringVarP(&flagConf, "config", "c", "", "A configuration file that describes how to run reflex.")
 	globalFlags.BoolVarP(&verbose,
 		"verbose", "v", false, "Verbose mode: print out more information about what reflex is doing.")
+	globalFlags.BoolVarP(&flagSequential,
+		"sequential", "e", false, "Don't run multiple commands at the same time.")
 	registerFlags(globalFlags, globalConfig)
 }
 
@@ -47,6 +50,17 @@ func registerFlags(f *flag.FlagSet, config *Config) {
 		"Indicates that the command is a long-running process to be restarted on matching changes.")
 	f.BoolVarP(&config.start, "start", "s", false,
 		"The substitution symbol that is replaced with the filename in a command.")
+}
+
+func anyNonGlobalsRegistered() bool {
+	any := false
+	walkFn := func(f *flag.Flag) {
+		if !(f.Name == "config" || f.Name == "verbose" || f.Name == "sequential") {
+			any = any || true
+		}
+	}
+	globalFlags.Visit(walkFn)
+	return any
 }
 
 func parseMatchers(rs, gs string) (regex *regexp.Regexp, glob string, err error) {
@@ -151,9 +165,21 @@ func (r *Reflex) PrintInfo(source string) {
 	fmt.Println("+---------")
 }
 
+func printGlobals() {
+	fmt.Println("Globals set at commandline")
+	walkFn := func(f *flag.Flag) {
+		fmt.Printf("| --%s (-%s) '%s' (default: '%s')\n", f.Name, f.Shorthand, f.Value, f.DefValue)
+	}
+	globalFlags.Visit(walkFn)
+	fmt.Println("+---------")
+}
+
 func main() {
 	if err := globalFlags.Parse(os.Args[1:]); err != nil {
 		Fatalln(err)
+	}
+	if verbose {
+		printGlobals()
 	}
 
 	reflexes := []*Reflex{}
@@ -168,8 +194,8 @@ func main() {
 		}
 		reflexes = append(reflexes, reflex)
 	} else {
-		if flag.NFlag() > 1 {
-			Fatalln("Cannot set other flags along with -c.")
+		if anyNonGlobalsRegistered() {
+			Fatalln("Cannot set other flags along with --config other than --sequential or --verbose.")
 		}
 		configFile, err := os.Open(flagConf)
 		if err != nil {

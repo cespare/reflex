@@ -51,7 +51,6 @@ TODO: Describe the two different batching strategies.
 * Handle the inverse (restart) case, for servers.
 * Options: specify only files or only directories.
 * Implement recursive globbing.
-* Allow for choosing between executing commands concurrently (faster) or sequentially (no interleaved output)
 * Three 'decoration' options: none, plain (prefix each line with a number/id -- default), fancy (colored
   lines)
 * Document file argument list splitting behavior (with go-shellquote)
