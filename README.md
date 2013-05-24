@@ -51,8 +51,9 @@ TODO: Describe the two different batching strategies.
 * Handle the inverse (restart) case, for servers.
 * Implement recursive globbing.
 * Document file argument list splitting behavior (with go-shellquote)
+* Clean up the readme when the interface has settled down.
+
 * Implement/copy the parts of go-shellquote that I need myself.
 * Add more debugging info to -v.
 * Consider vendoring all the deps.
-* Clean up the readme when the interface has settled down.
 * Fix/remove TODOs.
