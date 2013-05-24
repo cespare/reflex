@@ -29,6 +29,11 @@ const (
 	numColors  = 5
 )
 
+func infoPrintln(args ...interface{}) { stdout <- OutMsg{-1, fmt.Sprint(args...)} }
+func infoPrintf(format string, args ...interface{}) {
+	stdout <- OutMsg{-1, fmt.Sprintf(format, args...)}
+}
+
 func walker(watcher *fsnotify.Watcher) filepath.WalkFunc {
 	return func(path string, f os.FileInfo, err error) error {
 		if err != nil || !f.IsDir() {
@@ -38,11 +43,11 @@ func walker(watcher *fsnotify.Watcher) filepath.WalkFunc {
 			return nil
 		}
 		if verbose {
-			fmt.Println("Adding watch for path", path)
+			infoPrintln("Adding watch for path", path)
 		}
 		if err := watcher.Watch(path); err != nil {
 			// TODO: handle this somehow?
-			fmt.Printf("Error while watching new path %s: %s\n", path, err)
+			infoPrintf("Error while watching new path %s: %s\n", path, err)
 		}
 		return nil
 	}
@@ -69,7 +74,7 @@ func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done cha
 			if e.IsCreate() {
 				if err := filepath.Walk(path, walker(watcher)); err != nil {
 					// TODO: handle this somehow?
-					fmt.Printf("Error while walking path %s: %s\n", path, err)
+					infoPrintf("Error while walking path %s: %s\n", path, err)
 				}
 			}
 			if e.IsDelete() {
@@ -162,7 +167,11 @@ func filterMatching(in <-chan string, out chan<- string, reflex *Reflex) {
 		} else {
 			matches, err := filepath.Match(reflex.glob, name)
 			// TODO: It would be good to notify the user on an error here.
-			if !(err == nil && matches) {
+			if err != nil {
+				infoPrintln("Error matching glob:", err)
+				continue
+			}
+			if !matches {
 				continue
 			}
 		}
@@ -228,11 +237,23 @@ func runEach(names <-chan string, reflex *Reflex) {
 
 func printOutput(out <-chan OutMsg, writer io.Writer) {
 	for msg := range out {
+		tag := ""
+		if decoration == DecorationFancy || decoration == DecorationPlain {
+			if msg.reflexID < 0 {
+				tag = "[info]"
+			} else {
+				tag = fmt.Sprintf("[%02d]", msg.reflexID)
+			}
+		}
+
 		if decoration == DecorationFancy {
 			color := (msg.reflexID % numColors) + colorStart
-			fmt.Fprintf(writer, "\x1b[01;%dm[%02d] ", color, msg.reflexID)
+			if reflexID < 0 {
+				color = 31 // red
+			}
+			fmt.Fprintf(writer, "\x1b[01;%dm%s ", color, tag)
 		} else if decoration == DecorationPlain {
-			fmt.Fprintf(writer, "[%02d] ", msg.reflexID)
+			fmt.Fprintf(writer, tag+" ")
 		}
 		fmt.Fprint(writer, msg.message)
 		if decoration == DecorationFancy {
