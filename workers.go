@@ -186,22 +186,22 @@ func filterMatching(in <-chan string, out chan<- string, reflex *Reflex) {
 //	 because the file events come in quick bursts.
 // * Once it's time to send, don't do it until the out channel is unblocked. In the meantime, keep batching.
 //   When we've sent off all the batched messages, go back to the beginning.
-func batchRun(in <-chan string, out chan<- string, backlog Backlog) {
+func batchRun(in <-chan string, out chan<- string, reflex *Reflex) {
 	for name := range in {
-		backlog.Add(name)
+		reflex.backlog.Add(name)
 		timer := time.NewTimer(200 * time.Millisecond)
 	outer:
 		for {
 			select {
 			case name := <-in:
-				backlog.Add(name)
+				reflex.backlog.Add(name)
 			case <-timer.C:
 				for {
 					select {
 					case name := <-in:
-						backlog.Add(name)
-					case out <- backlog.Next():
-						if backlog.RemoveOne() {
+						reflex.backlog.Add(name)
+					case out <- reflex.backlog.Next():
+						if reflex.backlog.RemoveOne() {
 							break outer
 						}
 					}
@@ -213,7 +213,7 @@ func batchRun(in <-chan string, out chan<- string, backlog Backlog) {
 
 // runEach runs the command on each name that comes through the names channel. Each {} is replaced by the name
 // of the file. The stderr and stdout of the command are passed line-by-line to the stderr and stdout chans.
-func runEach(names <-chan string, stdout chan<- OutMsg, stderr chan<- OutMsg, reflex *Reflex) {
+func runEach(names <-chan string, reflex *Reflex) {
 	for name := range names {
 		replacer := strings.NewReplacer(reflex.subSymbol, name)
 		args := make([]string, len(reflex.command))

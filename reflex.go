@@ -37,15 +37,17 @@ var (
 	globalConfig   = &Config{}
 
 	reflexID = 0
+	stdout = make(chan OutMsg, 100)
+	stderr = make(chan OutMsg, 100)
 )
 
 type Config struct {
-	regex     string
-	glob      string
-	subSymbol string
-	start     bool
-	onlyFiles bool
-	onlyDirs  bool
+	regex        string
+	glob         string
+	subSymbol    string
+	startService bool
+	onlyFiles    bool
+	onlyDirs     bool
 }
 
 func init() {
@@ -62,10 +64,10 @@ func init() {
 func registerFlags(f *flag.FlagSet, config *Config) {
 	f.StringVarP(&config.regex, "regex", "r", "", "A regular expression to match filenames.")
 	f.StringVarP(&config.glob, "glob", "g", "", "A shell glob expression to match filenames.")
-	f.StringVarP(&config.subSymbol, "substitute", "u", defaultSubSymbol,
-		"Indicates that the command is a long-running process to be restarted on matching changes.")
-	f.BoolVarP(&config.start, "start", "s", false,
+	f.StringVar(&config.subSymbol, "substitute", defaultSubSymbol,
 		"The substitution symbol that is replaced with the filename in a command.")
+	f.BoolVarP(&config.startService, "start-service", "s", false,
+		"Indicates that the command is a long-running process to be restarted on matching changes.")
 	f.BoolVar(&config.onlyFiles, "only-files", false, "Only match files (not directories).")
 	f.BoolVar(&config.onlyDirs, "only-dirs", false, "Only match directories (not files).")
 }
@@ -106,16 +108,16 @@ func Fatalln(args ...interface{}) {
 // This ties together a single reflex 'instance' so that multiple watches/commands can be handled together
 // easily.
 type Reflex struct {
-	id        int
-	start     bool
-	backlog   Backlog
-	regex     *regexp.Regexp
-	glob      string
-	useRegex  bool
-	onlyFiles bool
-	onlyDirs  bool
-	command   []string
-	subSymbol string
+	id           int
+	startService bool
+	backlog      Backlog
+	regex        *regexp.Regexp
+	glob         string
+	useRegex     bool
+	onlyFiles    bool
+	onlyDirs     bool
+	command      []string
+	subSymbol    string
 
 	done       chan error
 	rawChanges chan string
@@ -147,6 +149,9 @@ func NewReflex(c *Config, command []string) (*Reflex, error) {
 
 	var backlog Backlog
 	if substitution {
+		if c.startService {
+			return nil, errors.New("Using --start-service does not work with a command that has a substitution symbol.")
+		}
 		backlog = &UniqueFilesBacklog{true, "", make(map[string]struct{})}
 	} else {
 		backlog = new(UnifiedBacklog)
@@ -157,16 +162,16 @@ func NewReflex(c *Config, command []string) (*Reflex, error) {
 	}
 
 	reflex := &Reflex{
-		id:        reflexID,
-		start:     c.start,
-		backlog:   backlog,
-		regex:     regex,
-		glob:      glob,
-		useRegex:  regex != nil,
-		onlyFiles: c.onlyFiles,
-		onlyDirs:  c.onlyDirs,
-		command:   command,
-		subSymbol: c.subSymbol,
+		id:           reflexID,
+		startService: c.startService,
+		backlog:      backlog,
+		regex:        regex,
+		glob:         glob,
+		useRegex:     regex != nil,
+		onlyFiles:    c.onlyFiles,
+		onlyDirs:     c.onlyDirs,
+		command:      command,
+		subSymbol:    c.subSymbol,
 
 		rawChanges: make(chan string),
 		filtered:   make(chan string),
@@ -296,15 +301,13 @@ func main() {
 	go watch(".", watcher, rawChanges, done)
 	go broadcast(rawChanges, allRawChanges)
 
-	stdout := make(chan OutMsg, 100)
-	stderr := make(chan OutMsg, 100)
 	go printOutput(stdout, os.Stdout)
 	go printOutput(stderr, os.Stderr)
 
 	for _, reflex := range reflexes {
 		go filterMatching(reflex.rawChanges, reflex.filtered, reflex)
-		go batchRun(reflex.filtered, reflex.batched, reflex.backlog)
-		go runEach(reflex.batched, stdout, stderr, reflex)
+		go batchRun(reflex.filtered, reflex.batched, reflex)
+		go runEach(reflex.batched, reflex)
 	}
 
 	Fatalln(<-done)
