@@ -44,6 +44,8 @@ type Config struct {
 	glob      string
 	subSymbol string
 	start     bool
+	onlyFiles bool
+	onlyDirs  bool
 }
 
 func init() {
@@ -64,6 +66,8 @@ func registerFlags(f *flag.FlagSet, config *Config) {
 		"Indicates that the command is a long-running process to be restarted on matching changes.")
 	f.BoolVarP(&config.start, "start", "s", false,
 		"The substitution symbol that is replaced with the filename in a command.")
+	f.BoolVar(&config.onlyFiles, "only-files", false, "Only match files (not directories).")
+	f.BoolVar(&config.onlyDirs, "only-dirs", false, "Only match directories (not files).")
 }
 
 func anyNonGlobalsRegistered() bool {
@@ -108,6 +112,8 @@ type Reflex struct {
 	regex     *regexp.Regexp
 	glob      string
 	useRegex  bool
+	onlyFiles bool
+	onlyDirs  bool
 	command   []string
 	subSymbol string
 
@@ -118,8 +124,8 @@ type Reflex struct {
 }
 
 // This function is not threadsafe.
-func NewReflex(regexString, globString string, command []string, start bool, subSymbol string) (*Reflex, error) {
-	regex, glob, err := parseMatchers(regexString, globString)
+func NewReflex(c *Config, command []string) (*Reflex, error) {
+	regex, glob, err := parseMatchers(c.regex, c.glob)
 	if err != nil {
 		Fatalln("Error parsing glob/regex.\n" + err.Error())
 	}
@@ -127,13 +133,13 @@ func NewReflex(regexString, globString string, command []string, start bool, sub
 		return nil, errors.New("Must give command to execute.")
 	}
 
-	if subSymbol == "" {
+	if c.subSymbol == "" {
 		return nil, errors.New("Substitution symbol must be non-empty.")
 	}
 
 	substitution := false
 	for _, part := range command {
-		if strings.Contains(part, subSymbol) {
+		if strings.Contains(part, c.subSymbol) {
 			substitution = true
 			break
 		}
@@ -146,15 +152,21 @@ func NewReflex(regexString, globString string, command []string, start bool, sub
 		backlog = new(UnifiedBacklog)
 	}
 
+	if c.onlyFiles && c.onlyDirs {
+		return nil, errors.New("Cannot specify both --only-files and --only-dirs.")
+	}
+
 	reflex := &Reflex{
 		id:        reflexID,
-		start:     start,
+		start:     c.start,
 		backlog:   backlog,
 		regex:     regex,
 		glob:      glob,
 		useRegex:  regex != nil,
+		onlyFiles: c.onlyFiles,
+		onlyDirs:  c.onlyDirs,
 		command:   command,
-		subSymbol: subSymbol,
+		subSymbol: c.subSymbol,
 
 		rawChanges: make(chan string),
 		filtered:   make(chan string),
@@ -167,6 +179,7 @@ func NewReflex(regexString, globString string, command []string, start bool, sub
 
 func (r *Reflex) PrintInfo(source string) {
 	fmt.Println("Reflex from", source)
+	fmt.Println("| ID:", r.id)
 	if r.regex == matchAll {
 		fmt.Println("| No regex (-r) or glob (-g) given, so matching all file changes.")
 	} else if r.useRegex {
@@ -174,6 +187,12 @@ func (r *Reflex) PrintInfo(source string) {
 	} else {
 		fmt.Println("| Glob:", r.glob)
 	}
+	if r.onlyFiles {
+		fmt.Println("| Only matching files.")
+	} else if r.onlyDirs {
+		fmt.Println("| Only matching directories.")
+	}
+	fmt.Println("| Substitution symbol", r.subSymbol)
 	replacer := strings.NewReplacer(r.subSymbol, "<filaname>")
 	command := make([]string, len(r.command))
 	for i, part := range r.command {
@@ -213,7 +232,7 @@ func main() {
 	reflexes := []*Reflex{}
 
 	if flagConf == "" {
-		reflex, err := NewReflex(globalConfig.regex, globalConfig.glob, globalFlags.Args(), false, globalConfig.subSymbol)
+		reflex, err := NewReflex(globalConfig, globalFlags.Args())
 		if err != nil {
 			Fatalln(err)
 		}
@@ -248,7 +267,7 @@ func main() {
 			if err := flags.Parse(parts); err != nil {
 				Fatalln(errorMsg, err)
 			}
-			reflex, err := NewReflex(config.regex, config.glob, flags.Args(), false, config.subSymbol)
+			reflex, err := NewReflex(config, flags.Args())
 			if err != nil {
 				Fatalln(errorMsg, err)
 			}

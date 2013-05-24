@@ -37,7 +37,9 @@ func walker(watcher *fsnotify.Watcher) filepath.WalkFunc {
 			// way), we often get errors.
 			return nil
 		}
-		fmt.Println("Adding watch for path", path)
+		if verbose {
+			fmt.Println("Adding watch for path", path)
+		}
 		if err := watcher.Watch(path); err != nil {
 			// TODO: handle this somehow?
 			fmt.Printf("Error while watching new path %s: %s\n", path, err)
@@ -161,6 +163,16 @@ func filterMatching(in <-chan string, out chan<- string, reflex *Reflex) {
 			matches, err := filepath.Match(reflex.glob, name)
 			// TODO: It would be good to notify the user on an error here.
 			if !(err == nil && matches) {
+				continue
+			}
+		}
+		// TODO: These only match if the file/dir still exists...not sure if there's a better way.
+		if reflex.onlyFiles || reflex.onlyDirs {
+			stat, err := os.Stat(name)
+			if err != nil {
+				continue
+			}
+			if (reflex.onlyFiles && stat.IsDir()) || (reflex.onlyDirs && !stat.IsDir()) {
 				continue
 			}
 		}
