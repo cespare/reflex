@@ -29,9 +29,9 @@ const (
 	numColors  = 5
 )
 
-func infoPrintln(args ...interface{}) { stdout <- OutMsg{-1, fmt.Sprint(args...)} }
-func infoPrintf(format string, args ...interface{}) {
-	stdout <- OutMsg{-1, fmt.Sprintf(format, args...)}
+func infoPrintln(id int, args ...interface{}) { stdout <- OutMsg{id, fmt.Sprint(args...)} }
+func infoPrintf(id int, format string, args ...interface{}) {
+	stdout <- OutMsg{id, fmt.Sprintf(format, args...)}
 }
 
 func walker(watcher *fsnotify.Watcher) filepath.WalkFunc {
@@ -43,11 +43,11 @@ func walker(watcher *fsnotify.Watcher) filepath.WalkFunc {
 			return nil
 		}
 		if verbose {
-			infoPrintln("Adding watch for path", path)
+			infoPrintln(-1, "Adding watch for path", path)
 		}
 		if err := watcher.Watch(path); err != nil {
 			// TODO: handle this somehow?
-			infoPrintf("Error while watching new path %s: %s\n", path, err)
+			infoPrintf(-1, "Error while watching new path %s: %s\n", path, err)
 		}
 		return nil
 	}
@@ -74,7 +74,7 @@ func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done cha
 			if e.IsCreate() {
 				if err := filepath.Walk(path, walker(watcher)); err != nil {
 					// TODO: handle this somehow?
-					infoPrintf("Error while walking path %s: %s\n", path, err)
+					infoPrintf(-1, "Error while walking path %s: %s\n", path, err)
 				}
 			}
 			if e.IsDelete() {
@@ -85,76 +85,6 @@ func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done cha
 			return
 		}
 	}
-}
-
-// runCommand runs the given Command. Blocks until the command exits. All output is passed line-by-line to the
-// stderr/stdout channels.
-func runCommand(cmd *exec.Cmd, reflexID int, stdout chan<- OutMsg, stderr chan<- OutMsg) error {
-	if flagSequential {
-		seqCommands.Lock()
-		defer seqCommands.Unlock()
-	}
-
-	cmdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	cmderr, err := cmd.StderrPipe()
-	if err != nil {
-		return err
-	}
-
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-
-	stdoutErr := make(chan error)
-	go func() {
-		scanner := bufio.NewScanner(cmdout)
-		for scanner.Scan() {
-			stdout <- OutMsg{reflexID, scanner.Text()}
-		}
-		stdoutErr <- scanner.Err()
-	}()
-
-	stderrErr := make(chan error)
-	go func() {
-		scanner := bufio.NewScanner(cmderr)
-		for scanner.Scan() {
-			stderr <- OutMsg{reflexID, scanner.Text()}
-		}
-		stderrErr <- scanner.Err()
-	}()
-
-	cmdErr := make(chan error)
-	go func() {
-		cmdErr <- cmd.Wait()
-	}()
-
-	for {
-		select {
-		case err := <-stdoutErr:
-			if err != nil {
-				return err
-			}
-			stdoutErr = nil
-		case err := <-stderrErr:
-			if err != nil {
-				return err
-			}
-			stderrErr = nil
-		case err := <-cmdErr:
-			if err != nil {
-				stderr <- OutMsg{reflexID, fmt.Sprintf("(error exit: %s)", err)}
-			}
-			cmdErr = nil
-		}
-		if stdoutErr == nil && stderrErr == nil && cmdErr == nil {
-			break
-		}
-	}
-
-	return nil
 }
 
 // filterMatching passes on messages matching the regex/glob.
@@ -168,7 +98,7 @@ func filterMatching(in <-chan string, out chan<- string, reflex *Reflex) {
 			matches, err := filepath.Match(reflex.glob, name)
 			// TODO: It would be good to notify the user on an error here.
 			if err != nil {
-				infoPrintln("Error matching glob:", err)
+				infoPrintln(reflex.id, "Error matching glob:", err)
 				continue
 			}
 			if !matches {
@@ -223,16 +153,131 @@ func batchRun(in <-chan string, out chan<- string, reflex *Reflex) {
 // runEach runs the command on each name that comes through the names channel. Each {} is replaced by the name
 // of the file. The stderr and stdout of the command are passed line-by-line to the stderr and stdout chans.
 func runEach(names <-chan string, reflex *Reflex) {
+	outer:
 	for name := range names {
-		replacer := strings.NewReplacer(reflex.subSymbol, name)
-		args := make([]string, len(reflex.command))
-		for i, c := range reflex.command {
-			args[i] = replacer.Replace(c)
+		if reflex.startService {
+			var timer *time.Timer
+			select {
+			case <-reflex.done:
+				infoPrintln(reflex.id, "Starting service")
+				runCommand(reflex, name, stdout, stderr)
+				continue outer
+			default:
+				if err := reflex.cmd.Process.Signal(os.Interrupt); err != nil {
+					infoPrintln(reflex.id, "Error sending interrupt:", err)
+				}
+				timer = time.NewTimer(1 * time.Second)
+			}
+			for {
+				select {
+				case <-reflex.done:
+					infoPrintln(reflex.id, "Starting service")
+					runCommand(reflex, name, stdout, stderr)
+					continue outer
+				case <-timer.C:
+					if err := reflex.cmd.Process.Kill(); err != nil {
+						infoPrintln(reflex.id, "Error killing process:", err)
+					}
+					timer = time.NewTimer(1 * time.Second)
+				}
+			}
+		} else {
+			runCommand(reflex, name, stdout, stderr)
+			<-reflex.done
 		}
-		cmd := exec.Command(args[0], args[1:]...)
-
-		runCommand(cmd, reflex.id, stdout, stderr)
 	}
+}
+
+		reflex.cmd = nil
+
+func replaceSubSymbol(command []string, subSymbol string, name string) []string {
+	replacer := strings.NewReplacer(subSymbol, name)
+	newCommand := make([]string, len(command))
+	for i, c := range command {
+		newCommand[i] = replacer.Replace(c)
+	}
+	return newCommand
+}
+
+// runCommand runs the given Command. All output is passed line-by-line to the stderr/stdout channels.
+func runCommand(reflex *Reflex, name string, stdout chan<- OutMsg, stderr chan<- OutMsg) {
+	command := replaceSubSymbol(reflex.command, reflex.subSymbol, name)
+	cmd := exec.Command(command[0], command[1:]...)
+	reflex.cmd = cmd
+
+	if flagSequential {
+		seqCommands.Lock()
+		defer seqCommands.Unlock()
+	}
+
+	cmdout, err := cmd.StdoutPipe()
+	if err != nil {
+		infoPrintln(reflex.id, err)
+		return
+	}
+	cmderr, err := cmd.StderrPipe()
+	if err != nil {
+		infoPrintln(reflex.id, err)
+		return
+	}
+
+	if err := cmd.Start(); err != nil {
+		infoPrintln(reflex.id, err)
+		return
+	}
+
+	stdoutErr := make(chan error)
+	go func() {
+		scanner := bufio.NewScanner(cmdout)
+		for scanner.Scan() {
+			stdout <- OutMsg{reflex.id, scanner.Text()}
+		}
+		stdoutErr <- scanner.Err()
+	}()
+
+	stderrErr := make(chan error)
+	go func() {
+		scanner := bufio.NewScanner(cmderr)
+		for scanner.Scan() {
+			stderr <- OutMsg{reflex.id, scanner.Text()}
+		}
+		stderrErr <- scanner.Err()
+	}()
+
+	cmdErr := make(chan error)
+	go func() {
+		cmdErr <- cmd.Wait()
+	}()
+
+	done = make(chan struct{})
+	reflex.done = done
+	go func() {
+		for {
+			select {
+			case err := <-stdoutErr:
+				if err != nil {
+					infoPrintln(reflex.id, err)
+				}
+				stdoutErr = nil
+			case err := <-stderrErr:
+				if err != nil {
+					infoPrintln(reflex.id, err)
+				}
+				stderrErr = nil
+			case err := <-cmdErr:
+				if err != nil {
+					stderr <- OutMsg{reflex.id, fmt.Sprintf("(error exit: %s)", err)}
+				}
+				cmdErr = nil
+			}
+			if stdoutErr == nil && stderrErr == nil && cmdErr == nil {
+				break
+			}
+		}
+		done <- struct{}{}
+	}()
+
+	return done
 }
 
 func printOutput(out <-chan OutMsg, writer io.Writer) {

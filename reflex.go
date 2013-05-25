@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"regexp"
 	"strings"
 
@@ -37,8 +38,8 @@ var (
 	globalConfig   = &Config{}
 
 	reflexID = 0
-	stdout = make(chan OutMsg, 100)
-	stderr = make(chan OutMsg, 100)
+	stdout   = make(chan OutMsg, 100)
+	stderr   = make(chan OutMsg, 100)
 )
 
 type Config struct {
@@ -123,6 +124,10 @@ type Reflex struct {
 	rawChanges chan string
 	filtered   chan string
 	batched    chan string
+
+	// Used for services (startService = true)
+	cmd  *exec.Cmd
+	done chan struct{}
 }
 
 // This function is not threadsafe.
