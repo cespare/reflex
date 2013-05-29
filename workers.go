@@ -119,13 +119,13 @@ func filterMatching(in <-chan string, out chan<- string, reflex *Reflex) {
 	}
 }
 
-// batchRun receives realtime file notification events and batches them up. It's a bit tricky, but here's what
+// batch receives realtime file notification events and batches them up. It's a bit tricky, but here's what
 // it accomplishes:
 // * When we initially get a message, wait a bit and batch messages before trying to send anything. This is
 //	 because the file events come in quick bursts.
 // * Once it's time to send, don't do it until the out channel is unblocked. In the meantime, keep batching.
 //   When we've sent off all the batched messages, go back to the beginning.
-func batchRun(in <-chan string, out chan<- string, reflex *Reflex) {
+func batch(in <-chan string, out chan<- string, reflex *Reflex) {
 	for name := range in {
 		reflex.backlog.Add(name)
 		timer := time.NewTimer(200 * time.Millisecond)
@@ -152,33 +152,33 @@ func batchRun(in <-chan string, out chan<- string, reflex *Reflex) {
 
 // runEach runs the command on each name that comes through the names channel. Each {} is replaced by the name
 // of the file. The stderr and stdout of the command are passed line-by-line to the stderr and stdout chans.
+// TODO: runEach/runCommand could really use a nice cleanup.
 func runEach(names <-chan string, reflex *Reflex) {
-	outer:
+outer:
 	for name := range names {
 		if reflex.startService {
-			var timer *time.Timer
 			select {
 			case <-reflex.done:
-				infoPrintln(reflex.id, "Starting service")
+				infoPrintln(reflex.id, "Restarting service")
 				runCommand(reflex, name, stdout, stderr)
 				continue outer
 			default:
 				if err := reflex.cmd.Process.Signal(os.Interrupt); err != nil {
 					infoPrintln(reflex.id, "Error sending interrupt:", err)
 				}
-				timer = time.NewTimer(1 * time.Second)
 			}
+			ticker := time.NewTicker(1 * time.Second)
+			defer ticker.Stop()
 			for {
 				select {
 				case <-reflex.done:
-					infoPrintln(reflex.id, "Starting service")
+					infoPrintln(reflex.id, "Restarting service")
 					runCommand(reflex, name, stdout, stderr)
 					continue outer
-				case <-timer.C:
+				case <-ticker.C:
 					if err := reflex.cmd.Process.Kill(); err != nil {
 						infoPrintln(reflex.id, "Error killing process:", err)
 					}
-					timer = time.NewTimer(1 * time.Second)
 				}
 			}
 		} else {
@@ -187,8 +187,6 @@ func runEach(names <-chan string, reflex *Reflex) {
 		}
 	}
 }
-
-		reflex.cmd = nil
 
 func replaceSubSymbol(command []string, subSymbol string, name string) []string {
 	replacer := strings.NewReplacer(subSymbol, name)
@@ -249,7 +247,7 @@ func runCommand(reflex *Reflex, name string, stdout chan<- OutMsg, stderr chan<-
 		cmdErr <- cmd.Wait()
 	}()
 
-	done = make(chan struct{})
+	done := make(chan struct{})
 	reflex.done = done
 	go func() {
 		for {
@@ -276,8 +274,6 @@ func runCommand(reflex *Reflex, name string, stdout chan<- OutMsg, stderr chan<-
 		}
 		done <- struct{}{}
 	}()
-
-	return done
 }
 
 func printOutput(out <-chan OutMsg, writer io.Writer) {

@@ -48,7 +48,6 @@ TODO: Describe the two different batching strategies.
 
 ## TODO
 
-* Handle the inverse (restart) case, for servers.
 * Implement recursive globbing.
 * Document file argument list splitting behavior (with go-shellquote)
 * Clean up the readme when the interface has settled down.

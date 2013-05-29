@@ -120,14 +120,13 @@ type Reflex struct {
 	command      []string
 	subSymbol    string
 
-	done       chan error
+	done       chan struct{}
 	rawChanges chan string
 	filtered   chan string
 	batched    chan string
 
 	// Used for services (startService = true)
-	cmd  *exec.Cmd
-	done chan struct{}
+	cmd *exec.Cmd
 }
 
 // This function is not threadsafe.
@@ -202,7 +201,9 @@ func (r *Reflex) PrintInfo(source string) {
 	} else if r.onlyDirs {
 		fmt.Println("| Only matching directories.")
 	}
-	fmt.Println("| Substitution symbol", r.subSymbol)
+	if !r.startService {
+		fmt.Println("| Substitution symbol", r.subSymbol)
+	}
 	replacer := strings.NewReplacer(r.subSymbol, "<filaname>")
 	command := make([]string, len(r.command))
 	for i, part := range r.command {
@@ -262,7 +263,7 @@ func main() {
 		lineNo := 0
 		for scanner.Scan() {
 			lineNo++
-			errorMsg := fmt.Sprintf("Error on line: %d", lineNo)
+			errorMsg := fmt.Sprintf("Error on line %d of %s:", lineNo, flagConf)
 			config := &Config{}
 			flags := flag.NewFlagSet("", flag.ContinueOnError)
 			registerFlags(flags, config)
@@ -311,8 +312,13 @@ func main() {
 
 	for _, reflex := range reflexes {
 		go filterMatching(reflex.rawChanges, reflex.filtered, reflex)
-		go batchRun(reflex.filtered, reflex.batched, reflex)
+		go batch(reflex.filtered, reflex.batched, reflex)
 		go runEach(reflex.batched, reflex)
+		if reflex.startService {
+			// Easy hack to kick off the initial start.
+			infoPrintln(reflex.id, "Starting service")
+			runCommand(reflex, "", stdout, stderr)
+		}
 	}
 
 	Fatalln(<-done)
