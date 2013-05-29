@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/howeyc/fsnotify"
 	"github.com/kballard/go-shellquote"
@@ -321,6 +323,21 @@ func main() {
 			Fatalln(err)
 		}
 	}
+
+	// Catch ctrl-c and make sure to kill off children.
+	signals := make(chan os.Signal, 1)
+	signal.Notify(signals, os.Interrupt)
+	go func() {
+		<-signals
+		fmt.Println("Interrupted. Cleaning up children...")
+		for _, reflex := range reflexes {
+			if reflex.done != nil {
+				go terminate(reflex)
+			}
+		}
+		<-time.NewTimer(500 * time.Millisecond).C
+		os.Exit(0)
+	}()
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {

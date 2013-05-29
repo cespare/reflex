@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/howeyc/fsnotify"
@@ -16,6 +17,9 @@ import (
 
 var (
 	seqCommands = &sync.Mutex{}
+	sysProcAttr = &syscall.SysProcAttr{ // Used to create a new session when launching a command.
+		Setsid: true,
+	}
 )
 
 type OutMsg struct {
@@ -42,9 +46,6 @@ func walker(watcher *fsnotify.Watcher) filepath.WalkFunc {
 			// way), we often get errors.
 			return nil
 		}
-		if verbose {
-			infoPrintln(-1, "Adding watch for path", path)
-		}
 		if err := watcher.Watch(path); err != nil {
 			// TODO: handle this somehow?
 			infoPrintf(-1, "Error while watching new path %s: %s\n", path, err)
@@ -62,8 +63,9 @@ func broadcast(in <-chan string, outs []chan<- string) {
 }
 
 func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done chan<- error) {
-	if err := watcher.Watch(root); err != nil {
-		Fatalln(err)
+	if err := filepath.Walk(root, walker(watcher)); err != nil {
+		// TODO: handle this somehow?
+		infoPrintf(-1, "Error while walking path %s: %s\n", root, err)
 	}
 
 	for {
@@ -128,7 +130,7 @@ func filterMatching(in <-chan string, out chan<- string, reflex *Reflex) {
 func batch(in <-chan string, out chan<- string, reflex *Reflex) {
 	for name := range in {
 		reflex.backlog.Add(name)
-		timer := time.NewTimer(200 * time.Millisecond)
+		timer := time.NewTimer(300 * time.Millisecond)
 	outer:
 		for {
 			select {
@@ -152,38 +154,40 @@ func batch(in <-chan string, out chan<- string, reflex *Reflex) {
 
 // runEach runs the command on each name that comes through the names channel. Each {} is replaced by the name
 // of the file. The stderr and stdout of the command are passed line-by-line to the stderr and stdout chans.
-// TODO: runEach/runCommand could really use a nice cleanup.
 func runEach(names <-chan string, reflex *Reflex) {
-outer:
 	for name := range names {
 		if reflex.startService {
-			select {
-			case <-reflex.done:
-				infoPrintln(reflex.id, "Restarting service")
-				runCommand(reflex, name, stdout, stderr)
-				continue outer
-			default:
-				if err := reflex.cmd.Process.Signal(os.Interrupt); err != nil {
-					infoPrintln(reflex.id, "Error sending interrupt:", err)
-				}
+			if reflex.done != nil {
+				infoPrintln(reflex.id, "Killing service")
+				terminate(reflex)
 			}
-			ticker := time.NewTicker(1 * time.Second)
-			defer ticker.Stop()
-			for {
-				select {
-				case <-reflex.done:
-					infoPrintln(reflex.id, "Restarting service")
-					runCommand(reflex, name, stdout, stderr)
-					continue outer
-				case <-ticker.C:
-					if err := reflex.cmd.Process.Kill(); err != nil {
-						infoPrintln(reflex.id, "Error killing process:", err)
-					}
-				}
-			}
+			infoPrintln(reflex.id, "Starting service")
+			runCommand(reflex, name, stdout, stderr)
 		} else {
 			runCommand(reflex, name, stdout, stderr)
 			<-reflex.done
+		}
+	}
+}
+
+func terminate(reflex *Reflex) {
+	first := true
+	timer := time.NewTimer(10 * time.Millisecond)
+	for {
+		select {
+		case <-reflex.done:
+			return
+		case <-timer.C:
+			signal := syscall.SIGKILL
+			if first {
+				signal = syscall.SIGINT
+				first = false
+			}
+			// Kill off the whole pgroup to ensure that any children of the spawned process get nuked too.
+			if err := syscall.Kill(-1 * reflex.cmd.Process.Pid, signal); err != nil {
+				infoPrintln(reflex.id, "Error killing:", err)
+			}
+			timer = time.NewTimer(500 * time.Millisecond)
 		}
 	}
 }
@@ -201,6 +205,7 @@ func replaceSubSymbol(command []string, subSymbol string, name string) []string 
 func runCommand(reflex *Reflex, name string, stdout chan<- OutMsg, stderr chan<- OutMsg) {
 	command := replaceSubSymbol(reflex.command, reflex.subSymbol, name)
 	cmd := exec.Command(command[0], command[1:]...)
+	cmd.SysProcAttr = sysProcAttr
 	reflex.cmd = cmd
 
 	if flagSequential {
@@ -249,6 +254,7 @@ func runCommand(reflex *Reflex, name string, stdout chan<- OutMsg, stderr chan<-
 	done := make(chan struct{})
 	reflex.done = done
 	go func() {
+	loop:
 		for {
 			select {
 			case err := <-stdoutErr:
@@ -265,10 +271,7 @@ func runCommand(reflex *Reflex, name string, stdout chan<- OutMsg, stderr chan<-
 				if err != nil {
 					stderr <- OutMsg{reflex.id, fmt.Sprintf("(error exit: %s)", err)}
 				}
-				cmdErr = nil
-			}
-			if stdoutErr == nil && stderrErr == nil && cmdErr == nil {
-				break
+				break loop
 			}
 		}
 		done <- struct{}{}
