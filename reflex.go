@@ -204,7 +204,7 @@ func (r *Reflex) PrintInfo(source string) {
 	if !r.startService {
 		fmt.Println("| Substitution symbol", r.subSymbol)
 	}
-	replacer := strings.NewReplacer(r.subSymbol, "<filaname>")
+	replacer := strings.NewReplacer(r.subSymbol, "<filename>")
 	command := make([]string, len(r.command))
 	for i, part := range r.command {
 		command[i] = replacer.Replace(part)

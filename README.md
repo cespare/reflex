@@ -48,10 +48,10 @@ TODO: Describe the two different batching strategies.
 
 ## TODO
 
-* Implement recursive globbing.
 * Document file argument list splitting behavior (with go-shellquote)
 * Clean up the readme when the interface has settled down.
 
+* Implement recursive globbing (globstar). (Actually fairly tricky.)
 * Implement/copy the parts of go-shellquote that I need myself.
 * Add more debugging info to -v.
 * Consider vendoring all the deps.
