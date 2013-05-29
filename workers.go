@@ -205,7 +205,6 @@ func runCommand(reflex *Reflex, name string, stdout chan<- OutMsg, stderr chan<-
 
 	if flagSequential {
 		seqCommands.Lock()
-		defer seqCommands.Unlock()
 	}
 
 	cmdout, err := cmd.StdoutPipe()
@@ -273,6 +272,9 @@ func runCommand(reflex *Reflex, name string, stdout chan<- OutMsg, stderr chan<-
 			}
 		}
 		done <- struct{}{}
+		if flagSequential {
+			seqCommands.Unlock()
+		}
 	}()
 }
 
