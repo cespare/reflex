@@ -2,6 +2,11 @@
 
 Reflex is a small tool to watch a directory and rerun a command when certain files change.
 
+## TL;DR
+
+    # Rerun make whenever a .c file changes
+    reflex -r '\.c$' make
+
 ## Installation
 
     $ go get github.com/cespare/reflex
@@ -9,50 +14,189 @@ Reflex is a small tool to watch a directory and rerun a command when certain fil
 Note that this has some dependencies outside of the Go standard library. You'll need git installed, and `go
 get` will automatically fetch them for you.
 
+Reflex probably only works on Linux and Mac OS.
+
+TODO: provide compiled downloads for linux/darwin amd64.
+
 ## Usage
 
-    $ reflex [OPTIONS] [COMMAND]
+The following is given by running `reflex -h`:
 
-`OPTIONS` are:
+    Usage: reflex [OPTIONS] [COMMAND]
 
-* `-h`: Display the help
-* `-r REGEX`: A [Go regular expression](http://golang.org/pkg/regexp/) to match paths.
+    COMMAND is any command you'd like to run. Any instance of {} will be replaced
+    with the filename of the changed file. (The symbol may be changed with the
+    --substitute flag.)
 
-TODO: fill out all the options after this has settled down a bit.
+    OPTIONS are given below:
+      -c, --config="": A configuration file that describes how to run reflex.
+      -d, --decoration="plain": How to decorate command stderr/stdout. Choices: none, plain, fancy.
+      -g, --glob="": A shell glob expression to match filenames.
+          --only-dirs=false: Only match directories (not files).
+          --only-files=false: Only match files (not directories).
+      -r, --regex="": A regular expression to match filenames.
+      -e, --sequential=false: Don't run multiple commands at the same time.
+      -s, --start-service=false: Indicates that the command is a long-running process to be restarted on matching changes.
+          --substitute="{}": The substitution symbol that is replaced with the filename in a command.
+      -v, --verbose=false: Verbose mode: print out more information about what reflex is doing.
 
-`COMMAND` is any command you'd like to run. Any instance of `{}` will be replaced with the filename of changed
-file.
+    Examples:
 
-## Tips
+        # Print each .txt file if it changes
+        $ reflex -r '\.txt$' echo {}
 
-* If you don't use `-r`, reflex will match every file. (It prints a warning, but if this is what you intend
-  you can safely ignore it.)
-* Many regex characters are interpreted specially by various shells. You'll generally want to minimize this
-  effect by putting the regex in single quotes.
-* If your command has options, you'll probably need to use `--` to separate the reflex flags from your command
-  flags. For example: `reflex -r '.*\.txt' -- ls -l`.
-* If you're going to use shell things, you might need to invoke a shell as a parent process:
-  `reflex -- bash -c 'sleep 1 && echo {}'`
+        # Run 'make' if any of the .c files in this directory change:
+        $ reflex -g '*.c' make
 
-## Examples
+        # Build and run a server; rebuild and restart when .java files change:
+        $ reflex -r '\.java$' -s -- sh -c 'make && java bin/Server'
 
-    # Print every file when it changes
-    reflex echo {}
-    # Run make when any .c file changes
-    reflex -r '\.c$' make
-    # TODO: more examples
+### Overview
 
-## Notes
+Reflex watches file changes in the current working directory and re-runs the command that you specify. The
+flags change what changes cause the command to be rerun and other behavior.
 
-TODO: Describe the two different batching strategies.
+### Patterns
+
+You can specify files to match using either shell glob patterns (`-g`) or regular expressions (`-r`). If you
+don't specify either, reflex will run your command after any file changes. You cannot specify glob patterns
+and regular expressions.
+
+The shell glob syntax is described [here](http://golang.org/pkg/path/filepath/#Match), while the regular
+expression syntax is described [here](https://code.google.com/p/re2/wiki/Syntax). The path that is matched
+against the glob or regular expression does not have a leading `./`. For example, if there is a file
+`./foobar.txt` that changes, then it will be matched by the regular expression `^foobar`.
+
+### --start-service
+
+The `--start-service` flag (short version: `-s`) inverts the behavior of command running: it runs the command
+when reflex starts and kills/restarts it each time files change. This is expected to be used with an
+indefinitely-running command, such as a server. You can use this flag to relaunch the server when the code is
+changed.
+
+### Substitution
+
+Reflex provides a way for you to determine, inside your command, what file changed. This is via a substitution
+symbol. The default is `{}`. Every instance of the substitution symbol inside your command is replaced by the
+filename.
+
+As a simple example, suppose you're writing Coffeescript and you wish to compile the CS files to Javascript
+when they change. You can do this with:
+
+    $ reflex -r '\.coffee$' -- coffee -c {}
+
+In case you need to use `{}` for something else in your command, you can change the substitution symbol with
+the `--substitute` flag.
+
+### Config file
+
+What if you want to run many watches at once? For example, when writing web applications I often want to
+rebuild/rerun the server when my code changes, but also build SCSS and Coffeescript when those change as well.
+Instead of running multiple reflex instances, which is inefficient, you can simply give reflex a config file.
+
+The config file syntax is extremely simple: each line is a command, and each command is just like calling
+reflex (except without the initial `reflex` command). Lines that start with `#` are ignored. Here's a simple
+example:
+
+    # Rebuild SCSS when it changes
+    -r '\.scss$' -- sh -c 'sass {} `basename {} .scss`.css'
+    # Restart server when ruby code changes
+    -sr '\.rb$' -- ./bin/run_server.sh
+
+### --sequential
+
+When using a config file to run multiple simultaneous commands, reflex will run them at the same time (if
+appropriate). That is, a particular command can only be run once a previous run of that command finishes, but
+two different commands may run at the same time. This is usually what you want (for speed).
+
+As a concrete example, consider this config file:
+
+    -- sh -c 'for i in `seq 1 5`; do sleep 0.1; echo first; done'
+    -- sh -c 'for i in `seq 1 5`; do sleep 0.1; echo second; done'
+
+When this runs, you'll see something like this:
+
+    [01] second
+    [00] first
+    [01] second
+    [00] first
+    [00] first
+    [01] second
+    [01] second
+    [00] first
+    [01] second
+    [00] first
+
+Note that the output is interleaved. (Reflex does ensure that each line of output is not interleaved with a
+different line). If, for some reason, you need to ensure that your commands don't run at the same time, you
+can do this with the `--sequential` (`-e`) flag. Then the output would look like (for example):
+
+    [01] second
+    [01] second
+    [01] second
+    [01] second
+    [01] second
+    [00] first
+    [00] first
+    [00] first
+    [00] first
+    [00] first
+
+### Decoration
+
+By default, each line of output from your command is prefixed with something like `[00]`, which is simply an
+id that reflex assigns to each command. You can use `--decoration` (`-d`) to change this output:
+`--decoration=none` will print the output as is; `--decoration=fancy` will color each line differently
+depending on which command it is, making it easier to distinguish the output.
+
+## Notes and Tips
+
+If you don't use `-r` or `-g`, reflex will match every file.
+
+Many regex characters are interpreted specially by various shells. You'll generally want to minimize this
+effect by putting the regex in single quotes.
+
+If your command has options, you'll probably need to use `--` to separate the reflex flags from your command
+flags. For example: `reflex -r '.*\.txt' -- ls -l`.
+
+If you're going to use shell things, you might need to invoke a shell as a parent process: `reflex -- sh -c
+'sleep 1 && echo {}'`
+
+It's not difficult to accidentally make an infinite loop with certain commands. For example, consider this
+command: `reflex -r '\.txt' cp {} {}.bak`. If `foo.txt` changes, then this will create `foo.txt.bak`,
+`foo.txt.bak.bak`, and so forth, because the regex `\.txt` matches each file. Right now reflex doesn't have
+any kind of infinite loop detection, so be careful with commands like `cp`.
+
+The restart behavior works as follows: if your program is still running, reflex sends it SIGINT; after 1
+second if it's still alive, it gets SIGKILL. The new process won't be started up until the old process is
+dead.
+
+### Batching
+
+Part of what reflex does is apply some heuristics to batch together file changes. There are many reasons that
+files change on disk, and these changes frequently come in large bursts. For instance, when you save a file in
+your editor, it probably makes a tempfile and then copies it over the target, leading to several different
+changes. Reflex hides this from you by batching some changes together.
+
+One thing to note, though, is that the the batching is a little different depending on whether or not you have
+a substitution symbol in your command. If you do not, then updates for different files that all match your
+pattern can be batched together in a single update that only causes your command to be run once.
+
+If you are using a substitution symbol, however, each unique matching file will be batched separately.
+
+### Argument list splitting
+
+When you give reflex a command from the commandline (i.e., not in a config file), that command is split into
+pieces by whatever shell you happen to be using. When reflex parses the config file, however, it must do that
+splitting itself. For this purpose, it uses [this library](https://github.com/kballard/go-shellquote) which
+attempts to match `sh`'s argument splitting rules.
+
+This difference can lead to slightly different behavior when running commands from a config file. If you're
+confused, it can help to use `--verbose` (`-v`) which will print out each command as interpreted by reflex.
 
 ## TODO
 
-* Document file argument list splitting behavior (with go-shellquote)
-* Clean up the readme when the interface has settled down.
-
 * Implement recursive globbing (globstar). (Actually fairly tricky.)
 * Implement/copy the parts of go-shellquote that I need myself.
-* Add more debugging info to -v.
 * Consider vendoring all the deps.
 * Fix/remove TODOs.

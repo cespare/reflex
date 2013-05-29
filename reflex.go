@@ -51,7 +51,34 @@ type Config struct {
 	onlyDirs     bool
 }
 
+func usage() {
+	fmt.Fprintf(os.Stderr, `Usage: %s [OPTIONS] [COMMAND]
+
+COMMAND is any command you'd like to run. Any instance of {} will be replaced
+with the filename of the changed file. (The symbol may be changed with the
+--substitute flag.)
+
+OPTIONS are given below:
+`, os.Args[0])
+
+	globalFlags.PrintDefaults()
+
+	fmt.Fprintln(os.Stderr, `
+Examples:
+
+    # Print each .txt file if it changes
+    $ reflex -r '\.txt$' echo {}
+
+    # Run 'make' if any of the .c files in this directory change:
+    $ reflex -g '*.c' make
+
+    # Build and run a server; rebuild and restart when .java files change:
+    $ reflex -r '\.java$' -s -- sh -c 'make && java bin/Server'
+`)
+}
+
 func init() {
+	globalFlags.Usage = usage
 	globalFlags.StringVarP(&flagConf, "config", "c", "", "A configuration file that describes how to run reflex.")
 	globalFlags.BoolVarP(&verbose,
 		"verbose", "v", false, "Verbose mode: print out more information about what reflex is doing.")
@@ -251,6 +278,9 @@ func main() {
 			reflex.PrintInfo("commandline")
 		}
 		reflexes = append(reflexes, reflex)
+		if flagSequential {
+			Fatalln("Cannot set --sequential without --config (because you cannot specify multiple commands).")
+		}
 	} else {
 		if anyNonGlobalsRegistered() {
 			Fatalln("Cannot set other flags along with --config other than --sequential, --verbose, and --decoration.")
