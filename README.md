@@ -1,6 +1,7 @@
 # Reflex
 
-Reflex is a small tool to watch a directory and rerun a command when certain files change.
+Reflex is a small tool to watch a directory and rerun a command when certain files change. It's great for
+automatically running compile/lint/test tasks and for reloading your application when the code changes.
 
 ## TL;DR
 
@@ -200,3 +201,19 @@ confused, it can help to use `--verbose` (`-v`) which will print out each comman
 * Implement/copy the parts of go-shellquote that I need myself.
 * Consider vendoring all the deps.
 * Fix/remove TODOs.
+
+## The competition
+
+* https://github.com/guard/guard
+* https://github.com/alexch/rerun
+* https://github.com/mynyml/watchr
+* https://github.com/alloy/kicker/
+
+### Why you should use reflex instead
+
+* Reflex has no dependencies. No need to install Ruby or anything like that.
+* Reflex uses an appropriate file watching mechanism to watch for changes efficiently on your platform.
+* Reflex gives your command the name of the file that changed.
+* No DSL to learn -- just give it a shell command.
+* No plugins.
+* Not tied to any language, framework, or workflow.
