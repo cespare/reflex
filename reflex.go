@@ -13,7 +13,7 @@ import (
 
 	"github.com/howeyc/fsnotify"
 	"github.com/kballard/go-shellquote"
-	flag "github.com/ogier/pflag"
+	flag "github.com/cespare/pflag"
 )
 
 const (
