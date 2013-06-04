@@ -9,11 +9,13 @@ import (
 	"os/signal"
 	"regexp"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
+	flag "github.com/cespare/pflag"
 	"github.com/howeyc/fsnotify"
 	"github.com/kballard/go-shellquote"
-	flag "github.com/cespare/pflag"
 )
 
 const (
@@ -29,6 +31,7 @@ const (
 )
 
 var (
+	reflexes []*Reflex
 	matchAll = regexp.MustCompile(".*")
 
 	flagConf       string
@@ -42,6 +45,8 @@ var (
 	reflexID = 0
 	stdout   = make(chan OutMsg, 100)
 	stderr   = make(chan OutMsg, 100)
+
+	cleanupMut = sync.Mutex{}
 )
 
 type Config struct {
@@ -251,6 +256,26 @@ func printGlobals() {
 	fmt.Println("+---------")
 }
 
+func cleanup(reason string) {
+	cleanupMut.Lock()
+	defer cleanupMut.Unlock()
+	fmt.Println(reason)
+	wg := sync.WaitGroup{}
+	for _, reflex := range reflexes {
+		if reflex.done != nil {
+			wg.Add(1)
+			go func(reflex *Reflex) {
+				terminate(reflex)
+				wg.Done()
+			}(reflex)
+		}
+	}
+	wg.Wait()
+	// Give just a little time to finish printing output.
+	<-time.NewTimer(10 * time.Millisecond).C
+	os.Exit(0)
+}
+
 func main() {
 	if err := globalFlags.Parse(os.Args[1:]); err != nil {
 		Fatalln(err)
@@ -268,8 +293,6 @@ func main() {
 	default:
 		Fatalln(fmt.Sprintf("Invalid decoration %s. Choices: none, plain, fancy.", flagDecoration))
 	}
-
-	reflexes := []*Reflex{}
 
 	if flagConf == "" {
 		reflex, err := NewReflex(globalConfig, globalFlags.Args())
@@ -327,17 +350,13 @@ func main() {
 	// Catch ctrl-c and make sure to kill off children.
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt)
+	signal.Notify(signals, os.Signal(syscall.SIGTERM))
 	go func() {
-		<-signals
-		fmt.Println("Interrupted. Cleaning up children...")
-		for _, reflex := range reflexes {
-			if reflex.done != nil {
-				go terminate(reflex)
-			}
-		}
-		<-time.NewTimer(500 * time.Millisecond).C
-		os.Exit(0)
+		s := <-signals
+		reason := fmt.Sprintf("Interrupted (%s). Cleaning up children...", s)
+		cleanup(reason)
 	}()
+	defer cleanup("Cleaning up.")
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
@@ -354,8 +373,7 @@ func main() {
 	go watch(".", watcher, rawChanges, done)
 	go broadcast(rawChanges, allRawChanges)
 
-	go printOutput(stdout, os.Stdout)
-	go printOutput(stderr, os.Stderr)
+	go printOutput(stdout, os.Stdout, stderr, os.Stderr)
 
 	for _, reflex := range reflexes {
 		go filterMatching(reflex.rawChanges, reflex.filtered, reflex)
