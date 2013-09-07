@@ -160,8 +160,12 @@ effect by putting the regex in single quotes.
 If your command has options, you'll probably need to use `--` to separate the reflex flags from your command
 flags. For example: `reflex -r '.*\.txt' -- ls -l`.
 
-If you're going to use shell things, you might need to invoke a shell as a parent process: `reflex -- sh -c
-'sleep 1 && echo {}'`
+If you're going to use shell things, you need to invoke a shell as a parent process:
+
+    reflex -- sh -c 'sleep 1 && echo {}'
+
+If your command is running with sudo, you'll need a passwordless sudo, because you cannot enter your password
+in through reflex.
 
 It's not difficult to accidentally make an infinite loop with certain commands. For example, consider this
 command: `reflex -r '\.txt' cp {} {}.bak`. If `foo.txt` changes, then this will create `foo.txt.bak`,
