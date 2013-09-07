@@ -13,14 +13,10 @@ import (
 	"time"
 
 	"github.com/howeyc/fsnotify"
+	"github.com/kr/pty"
 )
 
-var (
-	seqCommands = &sync.Mutex{}
-	sysProcAttr = &syscall.SysProcAttr{ // Used to create a new session when launching a command.
-		Setsid: true,
-	}
-)
+var seqCommands = &sync.Mutex{}
 
 type OutMsg struct {
 	reflexID int
@@ -34,10 +30,10 @@ const (
 )
 
 func infoPrintln(id int, args ...interface{}) {
-	stderr <- OutMsg{id, strings.TrimSpace(fmt.Sprintln(args...))}
+	stdout <- OutMsg{id, strings.TrimSpace(fmt.Sprintln(args...))}
 }
 func infoPrintf(id int, format string, args ...interface{}) {
-	stderr <- OutMsg{id, fmt.Sprintf(format, args...)}
+	stdout <- OutMsg{id, fmt.Sprintf(format, args...)}
 }
 
 func walker(watcher *fsnotify.Watcher) filepath.WalkFunc {
@@ -155,7 +151,7 @@ func batch(in <-chan string, out chan<- string, reflex *Reflex) {
 }
 
 // runEach runs the command on each name that comes through the names channel. Each {} is replaced by the name
-// of the file. The stderr and stdout of the command are passed line-by-line to the stderr and stdout chans.
+// of the file. The output of the command is passed line-by-line to the stdout chan.
 func runEach(names <-chan string, reflex *Reflex) {
 	for name := range names {
 		if reflex.startService {
@@ -164,9 +160,9 @@ func runEach(names <-chan string, reflex *Reflex) {
 				terminate(reflex)
 			}
 			infoPrintln(reflex.id, "Starting service")
-			runCommand(reflex, name, stdout, stderr)
+			runCommand(reflex, name, stdout)
 		} else {
-			runCommand(reflex, name, stdout, stderr)
+			runCommand(reflex, name, stdout)
 			<-reflex.done
 			reflex.done = nil
 		}
@@ -181,13 +177,18 @@ func terminate(reflex *Reflex) {
 		case <-reflex.done:
 			return
 		case <-timer.C:
-			signal := syscall.SIGKILL
 			if first {
-				signal = syscall.SIGINT
 				first = false
+				reflex.mut.Lock()
+				reflex.killed = true
+				reflex.mut.Unlock()
+
+				// Write ascii 3 (what you get from ^C) to the controlling tty.
+				reflex.tty.Write([]byte{3})
+				return
 			}
-			// Kill off the whole pgroup to ensure that any children of the spawned process get nuked too.
-			if err := syscall.Kill(-1*reflex.cmd.Process.Pid, signal); err != nil {
+			infoPrintln(reflex.id, "Error killing process. Trying again...")
+			if err := syscall.Kill(-1*reflex.cmd.Process.Pid, syscall.SIGKILL); err != nil {
 				infoPrintln(reflex.id, "Error killing:", err)
 				// TODO: is there a better way to detect this?
 				if err.Error() == "no such process" {
@@ -208,49 +209,30 @@ func replaceSubSymbol(command []string, subSymbol string, name string) []string 
 	return newCommand
 }
 
-// runCommand runs the given Command. All output is passed line-by-line to the stderr/stdout channels.
-func runCommand(reflex *Reflex, name string, stdout chan<- OutMsg, stderr chan<- OutMsg) {
+// runCommand runs the given Command. All output is passed line-by-line to the stdout channel.
+func runCommand(reflex *Reflex, name string, stdout chan<- OutMsg) {
 	command := replaceSubSymbol(reflex.command, reflex.subSymbol, name)
 	cmd := exec.Command(command[0], command[1:]...)
-	cmd.SysProcAttr = sysProcAttr
 	reflex.cmd = cmd
 
 	if flagSequential {
 		seqCommands.Lock()
 	}
 
-	cmdout, err := cmd.StdoutPipe()
+	tty, err := pty.Start(cmd)
 	if err != nil {
 		infoPrintln(reflex.id, err)
 		return
 	}
-	cmderr, err := cmd.StderrPipe()
-	if err != nil {
-		infoPrintln(reflex.id, err)
-		return
-	}
-
-	if err := cmd.Start(); err != nil {
-		infoPrintln(reflex.id, err)
-		return
-	}
+	reflex.tty = tty
 
 	stdoutErr := make(chan error)
 	go func() {
-		scanner := bufio.NewScanner(cmdout)
+		scanner := bufio.NewScanner(tty)
 		for scanner.Scan() {
 			stdout <- OutMsg{reflex.id, scanner.Text()}
 		}
 		stdoutErr <- scanner.Err()
-	}()
-
-	stderrErr := make(chan error)
-	go func() {
-		scanner := bufio.NewScanner(cmderr)
-		for scanner.Scan() {
-			stderr <- OutMsg{reflex.id, scanner.Text()}
-		}
-		stderrErr <- scanner.Err()
 	}()
 
 	cmdErr := make(chan error)
@@ -269,14 +251,12 @@ func runCommand(reflex *Reflex, name string, stdout chan<- OutMsg, stderr chan<-
 					infoPrintln(reflex.id, err)
 				}
 				stdoutErr = nil
-			case err := <-stderrErr:
-				if err != nil {
-					infoPrintln(reflex.id, err)
-				}
-				stderrErr = nil
 			case err := <-cmdErr:
-				if err != nil {
-					stderr <- OutMsg{reflex.id, fmt.Sprintf("(error exit: %s)", err)}
+				reflex.mut.Lock()
+				killed := reflex.killed
+				reflex.mut.Unlock()
+				if !killed && err != nil {
+					stdout <- OutMsg{reflex.id, fmt.Sprintf("(error exit: %s)", err)}
 				}
 				break loop
 			}
@@ -314,13 +294,8 @@ func printMsg(msg OutMsg, writer io.Writer) {
 	fmt.Fprintln(writer)
 }
 
-func printOutput(out <-chan OutMsg, outWriter io.Writer, err <-chan OutMsg, errWriter io.Writer) {
-	for {
-		select {
-		case msg := <-out:
-			printMsg(msg, outWriter)
-		case msg := <-err:
-			printMsg(msg, errWriter)
-		}
+func printOutput(out <-chan OutMsg, outWriter io.Writer) {
+	for msg := range out {
+		printMsg(msg, outWriter)
 	}
 }

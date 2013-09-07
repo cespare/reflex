@@ -44,7 +44,6 @@ var (
 
 	reflexID = 0
 	stdout   = make(chan OutMsg, 100)
-	stderr   = make(chan OutMsg, 100)
 
 	cleanupMut = sync.Mutex{}
 )
@@ -92,7 +91,7 @@ func init() {
 	globalFlags.BoolVarP(&flagSequential,
 		"sequential", "e", false, "Don't run multiple commands at the same time.")
 	globalFlags.StringVarP(&flagDecoration,
-		"decoration", "d", "plain", "How to decorate command stderr/stdout. Choices: none, plain, fancy.")
+		"decoration", "d", "plain", "How to decorate command output. Choices: none, plain, fancy.")
 	registerFlags(globalFlags, globalConfig)
 }
 
@@ -160,7 +159,10 @@ type Reflex struct {
 	batched    chan string
 
 	// Used for services (startService = true)
-	cmd *exec.Cmd
+	cmd    *exec.Cmd
+	tty    *os.File
+	mut    sync.Mutex // protects killed
+	killed bool
 }
 
 // This function is not threadsafe.
@@ -373,7 +375,7 @@ func main() {
 	go watch(".", watcher, rawChanges, done)
 	go broadcast(rawChanges, allRawChanges)
 
-	go printOutput(stdout, os.Stdout, stderr, os.Stderr)
+	go printOutput(stdout, os.Stdout)
 
 	for _, reflex := range reflexes {
 		go filterMatching(reflex.rawChanges, reflex.filtered, reflex)
@@ -382,7 +384,7 @@ func main() {
 		if reflex.startService {
 			// Easy hack to kick off the initial start.
 			infoPrintln(reflex.id, "Starting service")
-			runCommand(reflex, "", stdout, stderr)
+			runCommand(reflex, "", stdout)
 		}
 	}
 
