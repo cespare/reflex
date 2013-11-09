@@ -15,7 +15,7 @@ import (
 
 	flag "github.com/cespare/pflag"
 	"github.com/howeyc/fsnotify"
-	"github.com/kballard/go-shellquote"
+	shellquote "github.com/kballard/go-shellquote"
 )
 
 const (

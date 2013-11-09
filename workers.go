@@ -183,8 +183,8 @@ func terminate(reflex *Reflex) {
 				reflex.killed = true
 				reflex.mut.Unlock()
 
-				// Write ascii 3 (what you get from ^C) to the controlling tty.
-				reflex.tty.Write([]byte{3})
+				// Write ascii 3 (what you get from ^C) to the controlling pty.
+				reflex.tty.Write([]byte{4})
 				return
 			}
 			infoPrintln(reflex.id, "Error killing process. Trying again...")
@@ -226,40 +226,25 @@ func runCommand(reflex *Reflex, name string, stdout chan<- OutMsg) {
 	}
 	reflex.tty = tty
 
-	stdoutErr := make(chan error)
 	go func() {
 		scanner := bufio.NewScanner(tty)
 		for scanner.Scan() {
 			stdout <- OutMsg{reflex.id, scanner.Text()}
 		}
-		stdoutErr <- scanner.Err()
-	}()
-
-	cmdErr := make(chan error)
-	go func() {
-		cmdErr <- cmd.Wait()
+		// Intentionally ignoring scanner.Err() for now.
+		// Unfortunately, the pty returns a read error when the child dies naturally, so I'm just going to ignore
+		// errors here unless I can find a better way to handle it.
 	}()
 
 	done := make(chan struct{})
 	reflex.done = done
 	go func() {
-	loop:
-		for {
-			select {
-			case err := <-stdoutErr:
-				if err != nil {
-					infoPrintln(reflex.id, err)
-				}
-				stdoutErr = nil
-			case err := <-cmdErr:
-				reflex.mut.Lock()
-				killed := reflex.killed
-				reflex.mut.Unlock()
-				if !killed && err != nil {
-					stdout <- OutMsg{reflex.id, fmt.Sprintf("(error exit: %s)", err)}
-				}
-				break loop
-			}
+		err := cmd.Wait()
+		reflex.mut.Lock()
+		killed := reflex.killed
+		reflex.mut.Unlock()
+		if !killed && err != nil {
+			stdout <- OutMsg{reflex.id, fmt.Sprintf("(error exit: %s)", err)}
 		}
 		done <- struct{}{}
 		if flagSequential {
