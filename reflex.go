@@ -45,7 +45,7 @@ var (
 	reflexID = 0
 	stdout   = make(chan OutMsg, 100)
 
-	cleanupMut = sync.Mutex{}
+	cleanupMut = &sync.Mutex{}
 )
 
 type Config struct {
@@ -161,7 +161,7 @@ type Reflex struct {
 	// Used for services (startService = true)
 	cmd    *exec.Cmd
 	tty    *os.File
-	mut    sync.Mutex // protects killed
+	mut    *sync.Mutex // protects killed
 	killed bool
 }
 
@@ -216,6 +216,8 @@ func NewReflex(c *Config, command []string) (*Reflex, error) {
 		rawChanges: make(chan string),
 		filtered:   make(chan string),
 		batched:    make(chan string),
+
+		mut: &sync.Mutex{},
 	}
 	reflexID++
 
