@@ -170,37 +170,37 @@ func runEach(names <-chan string, reflex *Reflex) {
 }
 
 func terminate(reflex *Reflex) {
-	first := true
-	sig := syscall.SIGINT
 	reflex.mut.Lock()
 	reflex.killed = true
 	reflex.mut.Unlock()
 	// Write ascii 3 (what you get from ^C) to the controlling pty.
+	// (should be harmless if the process already died as the write will simply fail)
 	reflex.tty.Write([]byte{3})
 
 	timer := time.NewTimer(500 * time.Millisecond)
+	sig := syscall.SIGINT
 	for {
 		select {
 		case <-reflex.done:
 			return
 		case <-timer.C:
-			if first {
+			if sig == syscall.SIGINT {
 				infoPrintln(reflex.id, "Sending SIGINT signal...")
 			} else {
-				infoPrintln(reflex.id, "Error killing process. Trying again with SIGKILL...")
+				infoPrintln(reflex.id, "Sending SIGKILL signal...")
 			}
 
-			if err := reflex.cmd.Process.Signal(sig); err != nil {
+			// We do not use reflex.cmd.Process.Signal(..) here because we want
+			// to kill the whole process group
+			if err := syscall.Kill(-1*reflex.cmd.Process.Pid, sig); err != nil {
 				infoPrintln(reflex.id, "Error killing:", err)
 				// TODO: is there a better way to detect this?
 				if err.Error() == "no such process" {
 					return
 				}
 			}
-			if first {
-				first = false
-				sig = syscall.SIGKILL
-			}
+			// next try will use the SIGKILL signal
+			sig = syscall.SIGKILL
 		}
 	}
 }
