@@ -174,7 +174,7 @@ func terminate(reflex *Reflex) {
 	reflex.killed = true
 	reflex.mut.Unlock()
 	// Write ascii 3 (what you get from ^C) to the controlling pty.
-	// (should be harmless if the process already died as the write will simply fail)
+	// (This won't do anything if the process already died as the write will simply fail.)
 	reflex.tty.Write([]byte{3})
 
 	timer := time.NewTimer(500 * time.Millisecond)
@@ -190,8 +190,8 @@ func terminate(reflex *Reflex) {
 				infoPrintln(reflex.id, "Sending SIGKILL signal...")
 			}
 
-			// We do not use reflex.cmd.Process.Signal(..) here because we want
-			// to kill the whole process group
+			// Instead of killing the process, we want to kill its whole pgroup in order to clean up any children
+			// the process may have created.
 			if err := syscall.Kill(-1*reflex.cmd.Process.Pid, sig); err != nil {
 				infoPrintln(reflex.id, "Error killing:", err)
 				// TODO: is there a better way to detect this?
@@ -199,7 +199,7 @@ func terminate(reflex *Reflex) {
 					return
 				}
 			}
-			// next try will use the SIGKILL signal
+			// After SIGINT doesn't do anything, try SIGKILL.
 			sig = syscall.SIGKILL
 		}
 	}
