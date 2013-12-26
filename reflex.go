@@ -32,8 +32,31 @@ const (
 )
 
 type MatchingFxn func(name string) bool
+
 func matchAll(name string) bool {
 	return true
+}
+
+func globMatcher(gs string, invert bool) (MatchingFxn, error) {
+	return func(name string) bool {
+		matches, err := filepath.Match(gs, name)
+		// TODO: It would be good to notify the user on an error here.
+		if err != nil {
+			infoPrintln(0, "Error matching glob:", err)
+			return false
+		}
+		return (invert != matches) // XOR
+	}, nil
+}
+
+func regexMatcher(rs string, invert bool) (MatchingFxn, error) {
+	regex, err := regexp.Compile(rs)
+	if err != nil {
+		return nil, err
+	}
+	return func(name string) bool {
+		return (invert != regex.MatchString(name)) // XOR
+	}, nil
 }
 
 var (
@@ -56,6 +79,8 @@ var (
 type Config struct {
 	regex        string
 	glob         string
+	invertRegex  string
+	invertGlob   string
 	subSymbol    string
 	startService bool
 	onlyFiles    bool
@@ -102,7 +127,9 @@ func init() {
 
 func registerFlags(f *flag.FlagSet, config *Config) {
 	f.StringVarP(&config.regex, "regex", "r", "", "A regular expression to match filenames.")
+	f.StringVarP(&config.invertRegex, "invertRegex", "R", "", "A regular expression to exclude matching filenames.")
 	f.StringVarP(&config.glob, "glob", "g", "", "A shell glob expression to match filenames.")
+	f.StringVarP(&config.invertGlob, "invertGlob", "G", "", "A shell glob expression to exclude matching filenames.")
 	f.StringVar(&config.subSymbol, "substitute", defaultSubSymbol,
 		"The substitution symbol that is replaced with the filename in a command.")
 	f.BoolVarP(&config.startService, "start-service", "s", false,
@@ -122,31 +149,47 @@ func anyNonGlobalsRegistered() bool {
 	return any
 }
 
-func parseMatchers(rs, gs string) (matcher MatchingFxn, matcherInfo string, err error) {
-	if rs == "" && gs == "" {
-		return matchAll, "| No regex (-r) or glob (-g) given, so matching all files", nil
+type PatternInvertPair struct {
+	pattern      string
+	invertString string
+}
+
+func parseMatchers(rs, gs, invert_rs, invert_gs string) (matcher MatchingFxn, matcherInfo string, err error) {
+	if rs == "" && gs == "" && invert_rs == "" && invert_gs == "" {
+		return matchAll, "| No regex (-r|-R) or glob (-g|-G) given, so matching all files", nil
 	}
-	if rs == "" {
-		return func(name string) bool {
-			matches, err := filepath.Match(gs, name)
-			// TODO: It would be good to notify the user on an error here.
+
+	var matchers = []MatchingFxn{}
+	var matchInfos = []string{}
+	for _, x := range []PatternInvertPair{{gs, ""}, {invert_gs, "invert"}} {
+		if x.pattern != "" {
+			m, err := globMatcher(x.pattern, x.invertString != "")
 			if err != nil {
-				infoPrintln(0, "Error matching glob:", err)
+				return nil, "", err
+			}
+			matchers = append(matchers, m)
+			matchInfos = append(matchInfos, fmt.Sprintf("| %sGlob: %s", x.invertString, x.pattern))
+		}
+	}
+	for _, x := range []PatternInvertPair{{rs, ""}, {invert_rs, "invert"}} {
+		if x.pattern != "" {
+			m, err := regexMatcher(x.pattern, x.invertString != "")
+			if err != nil {
+				return nil, "", err
+			}
+			matchers = append(matchers, m)
+			matchInfos = append(matchInfos, fmt.Sprintf("| %sRegex: %s", x.invertString, x.pattern))
+		}
+	}
+	return func(name string) bool {
+		for _, m := range matchers {
+			if !m(name) {
 				return false
 			}
-			return matches
-		}, fmt.Sprintf("| Glob: ", gs), nil
-	}
-	if gs == "" {
-		regex, err := regexp.Compile(rs)
-		if err != nil {
-			return nil, "", err
 		}
-		return func(name string) bool {
-			return regex.MatchString(name)
-		}, fmt.Sprintf("| Regex: %s", regex), nil
-	}
-	return nil, "", errors.New("Both regex and glob specified.")
+		return true
+	}, strings.Join(matchInfos, ", and\n"), nil
+
 }
 
 func Fatalln(args ...interface{}) {
@@ -181,7 +224,7 @@ type Reflex struct {
 
 // This function is not threadsafe.
 func NewReflex(c *Config, command []string) (*Reflex, error) {
-	matcher, matcherInfo, err := parseMatchers(c.regex, c.glob)
+	matcher, matcherInfo, err := parseMatchers(c.regex, c.glob, c.invertRegex, c.invertGlob)
 	if err != nil {
 		Fatalln("Error parsing glob/regex.\n" + err.Error())
 	}
