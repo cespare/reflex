@@ -90,20 +90,8 @@ func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done cha
 // filterMatching passes on messages matching the regex/glob.
 func filterMatching(in <-chan string, out chan<- string, reflex *Reflex) {
 	for name := range in {
-		if reflex.useRegex {
-			if !reflex.regex.MatchString(name) {
-				continue
-			}
-		} else {
-			matches, err := filepath.Match(reflex.glob, name)
-			// TODO: It would be good to notify the user on an error here.
-			if err != nil {
-				infoPrintln(reflex.id, "Error matching glob:", err)
-				continue
-			}
-			if !matches {
-				continue
-			}
+		if !reflex.matcher(name) {
+			continue
 		}
 		// TODO: These only match if the file/dir still exists...not sure if there's a better way.
 		if reflex.onlyFiles || reflex.onlyDirs {

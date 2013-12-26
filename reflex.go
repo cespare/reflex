@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -30,9 +31,13 @@ const (
 	DecorationFancy
 )
 
+type MatchingFxn func(name string) bool
+func matchAll(name string) bool {
+	return true
+}
+
 var (
 	reflexes []*Reflex
-	matchAll = regexp.MustCompile(".*")
 
 	flagConf       string
 	flagSequential bool
@@ -117,19 +122,29 @@ func anyNonGlobalsRegistered() bool {
 	return any
 }
 
-func parseMatchers(rs, gs string) (regex *regexp.Regexp, glob string, err error) {
+func parseMatchers(rs, gs string) (matcher MatchingFxn, matcherInfo string, err error) {
 	if rs == "" && gs == "" {
-		return matchAll, "", nil
+		return matchAll, "| No regex (-r) or glob (-g) given, so matching all files", nil
 	}
 	if rs == "" {
-		return nil, gs, nil
+		return func(name string) bool {
+			matches, err := filepath.Match(gs, name)
+			// TODO: It would be good to notify the user on an error here.
+			if err != nil {
+				infoPrintln(0, "Error matching glob:", err)
+				return false
+			}
+			return matches
+		}, fmt.Sprintf("| Glob: ", gs), nil
 	}
 	if gs == "" {
 		regex, err := regexp.Compile(rs)
 		if err != nil {
 			return nil, "", err
 		}
-		return regex, "", nil
+		return func(name string) bool {
+			return regex.MatchString(name)
+		}, fmt.Sprintf("| Regex: %s", regex), nil
 	}
 	return nil, "", errors.New("Both regex and glob specified.")
 }
@@ -145,9 +160,8 @@ type Reflex struct {
 	id           int
 	startService bool
 	backlog      Backlog
-	regex        *regexp.Regexp
-	glob         string
-	useRegex     bool
+	matcher      MatchingFxn
+	matcherInfo  string
 	onlyFiles    bool
 	onlyDirs     bool
 	command      []string
@@ -167,7 +181,7 @@ type Reflex struct {
 
 // This function is not threadsafe.
 func NewReflex(c *Config, command []string) (*Reflex, error) {
-	regex, glob, err := parseMatchers(c.regex, c.glob)
+	matcher, matcherInfo, err := parseMatchers(c.regex, c.glob)
 	if err != nil {
 		Fatalln("Error parsing glob/regex.\n" + err.Error())
 	}
@@ -205,9 +219,8 @@ func NewReflex(c *Config, command []string) (*Reflex, error) {
 		id:           reflexID,
 		startService: c.startService,
 		backlog:      backlog,
-		regex:        regex,
-		glob:         glob,
-		useRegex:     regex != nil,
+		matcher:      matcher,
+		matcherInfo:  matcherInfo,
 		onlyFiles:    c.onlyFiles,
 		onlyDirs:     c.onlyDirs,
 		command:      command,
@@ -227,13 +240,7 @@ func NewReflex(c *Config, command []string) (*Reflex, error) {
 func (r *Reflex) PrintInfo(source string) {
 	fmt.Println("Reflex from", source)
 	fmt.Println("| ID:", r.id)
-	if r.regex == matchAll {
-		fmt.Println("| No regex (-r) or glob (-g) given, so matching all file changes.")
-	} else if r.useRegex {
-		fmt.Println("| Regex:", r.regex)
-	} else {
-		fmt.Println("| Glob:", r.glob)
-	}
+	fmt.Println(r.matcherInfo)
 	if r.onlyFiles {
 		fmt.Println("| Only matching files.")
 	} else if r.onlyDirs {
