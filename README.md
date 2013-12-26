@@ -211,7 +211,8 @@ confused, it can help to use `--verbose` (`-v`) which will print out each comman
 * https://github.com/guard/guard
 * https://github.com/alexch/rerun
 * https://github.com/mynyml/watchr
-* https://github.com/alloy/kicker/
+* https://github.com/eaburns/Watch
+* https://github.com/alloy/kicker
 
 ### Why you should use reflex instead
 
@@ -220,4 +221,4 @@ confused, it can help to use `--verbose` (`-v`) which will print out each comman
 * Reflex gives your command the name of the file that changed.
 * No DSL to learn -- just give it a shell command.
 * No plugins.
-* Not tied to any language, framework, or workflow.
+* Not tied to any language, framework, workflow, or editor.
