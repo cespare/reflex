@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -314,11 +315,21 @@ func main() {
 		if anyNonGlobalsRegistered() {
 			Fatalln("Cannot set other flags along with --config other than --sequential, --verbose, and --decoration.")
 		}
-		configFile, err := os.Open(flagConf)
-		if err != nil {
-			Fatalln(err)
+
+		// Now open the configuration file.
+		// As a special case we read the config from stdin if --config is set to "-"
+		var config io.ReadCloser
+		if flagConf == "-" {
+			config = os.Stdin
+		} else {
+			configFile, err := os.Open(flagConf)
+			if err != nil {
+				Fatalln(err)
+			}
+			config = configFile
 		}
-		scanner := bufio.NewScanner(configFile)
+
+		scanner := bufio.NewScanner(config)
 		lineNo := 0
 		for scanner.Scan() {
 			lineNo++
@@ -349,6 +360,7 @@ func main() {
 		if err := scanner.Err(); err != nil {
 			Fatalln(err)
 		}
+		config.Close()
 	}
 
 	// Catch ctrl-c and make sure to kill off children.
