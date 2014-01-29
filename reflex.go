@@ -86,25 +86,33 @@ Examples:
 
 func init() {
 	globalFlags.Usage = usage
-	globalFlags.StringVarP(&flagConf, "config", "c", "", "A configuration file that describes how to run reflex.")
-	globalFlags.BoolVarP(&verbose,
-		"verbose", "v", false, "Verbose mode: print out more information about what reflex is doing.")
-	globalFlags.BoolVarP(&flagSequential,
-		"sequential", "e", false, "Don't run multiple commands at the same time.")
-	globalFlags.StringVarP(&flagDecoration,
-		"decoration", "d", "plain", "How to decorate command output. Choices: none, plain, fancy.")
+	globalFlags.StringVarP(&flagConf, "config", "c", "", `
+            A configuration file that describes how to run reflex
+            (or '-' to read the configuration from stdin).`)
+	globalFlags.BoolVarP(&verbose, "verbose", "v", false, `
+            Verbose mode: print out more information about what reflex is doing.`)
+	globalFlags.BoolVarP(&flagSequential, "sequential", "e", false, `
+            Don't run multiple commands at the same time.`)
+	globalFlags.StringVarP(&flagDecoration, "decoration", "d", "plain", `
+            How to decorate command output. Choices: none, plain, fancy.`)
 	registerFlags(globalFlags, globalConfig)
 }
 
 func registerFlags(f *flag.FlagSet, config *Config) {
-	f.StringVarP(&config.regex, "regex", "r", "", "A regular expression to match filenames.")
-	f.StringVarP(&config.glob, "glob", "g", "", "A shell glob expression to match filenames.")
-	f.StringVar(&config.subSymbol, "substitute", defaultSubSymbol,
-		"The substitution symbol that is replaced with the filename in a command.")
-	f.BoolVarP(&config.startService, "start-service", "s", false,
-		"Indicates that the command is a long-running process to be restarted on matching changes.")
-	f.BoolVar(&config.onlyFiles, "only-files", false, "Only match files (not directories).")
-	f.BoolVar(&config.onlyDirs, "only-dirs", false, "Only match directories (not files).")
+	f.StringVarP(&config.regex, "regex", "r", "", `
+            A regular expression to match filenames.`)
+	f.StringVarP(&config.glob, "glob", "g", "", `
+            A shell glob expression to match filenames.`)
+	f.StringVar(&config.subSymbol, "substitute", defaultSubSymbol, `
+            The substitution symbol that is replaced with the filename
+            in a command.`)
+	f.BoolVarP(&config.startService, "start-service", "s", false, `
+            Indicates that the command is a long-running process to be
+            restarted on matching changes.`)
+	f.BoolVar(&config.onlyFiles, "only-files", false, `
+            Only match files (not directories).`)
+	f.BoolVar(&config.onlyDirs, "only-dirs", false, `
+            Only match directories (not files).`)
 }
 
 func anyNonGlobalsRegistered() bool {
