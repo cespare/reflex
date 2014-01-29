@@ -23,23 +23,36 @@ TODO: provide compiled downloads for linux/darwin amd64.
 
 The following is given by running `reflex -h`:
 
-    Usage: reflex [OPTIONS] [COMMAND]
+    Usage: ./reflex [OPTIONS] [COMMAND]
 
     COMMAND is any command you'd like to run. Any instance of {} will be replaced
     with the filename of the changed file. (The symbol may be changed with the
     --substitute flag.)
 
     OPTIONS are given below:
-      -c, --config="": A configuration file that describes how to run reflex.
-      -d, --decoration="plain": How to decorate command stderr/stdout. Choices: none, plain, fancy.
-      -g, --glob="": A shell glob expression to match filenames.
-          --only-dirs=false: Only match directories (not files).
-          --only-files=false: Only match files (not directories).
-      -r, --regex="": A regular expression to match filenames.
-      -e, --sequential=false: Don't run multiple commands at the same time.
-      -s, --start-service=false: Indicates that the command is a long-running process to be restarted on matching changes.
-          --substitute="{}": The substitution symbol that is replaced with the filename in a command.
-      -v, --verbose=false: Verbose mode: print out more information about what reflex is doing.
+      -c, --config="":
+                A configuration file that describes how to run reflex
+                (or '-' to read the configuration from stdin).
+      -d, --decoration="plain":
+                How to decorate command output. Choices: none, plain, fancy.
+      -g, --glob="":
+                A shell glob expression to match filenames.
+          --only-dirs=false:
+                Only match directories (not files).
+          --only-files=false:
+                Only match files (not directories).
+      -r, --regex="":
+                A regular expression to match filenames.
+      -e, --sequential=false:
+                Don't run multiple commands at the same time.
+      -s, --start-service=false:
+                Indicates that the command is a long-running process to be
+                restarted on matching changes.
+          --substitute="{}":
+                The substitution symbol that is replaced with the filename
+                in a command.
+      -v, --verbose=false:
+                Verbose mode: print out more information about what reflex is doing.
 
     Examples:
 
