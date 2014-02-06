@@ -200,7 +200,7 @@ func terminate(reflex *Reflex) {
 				}
 			}
 			// After SIGINT doesn't do anything, try SIGKILL 5 seconds later.
-			timer.Reset(5000 * time.Millisecond)
+			timer.Reset(500 * time.Millisecond)
 			sig = syscall.SIGKILL
 		}
 	}
