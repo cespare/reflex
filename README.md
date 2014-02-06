@@ -235,3 +235,9 @@ confused, it can help to use `--verbose` (`-v`) which will print out each comman
 * No DSL to learn -- just give it a shell command.
 * No plugins.
 * Not tied to any language, framework, workflow, or editor.
+
+## Authors
+
+Caleb Spare ([cespare](https://github.com/cespare))
+Seth W. Klein ([sethwklein](https://github.com/sethwklein))
+Vincent Vanackere ([vanackere](https://github.com/vanackere))
