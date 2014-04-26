@@ -73,6 +73,9 @@ func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done cha
 			if verbose {
 				infoPrintln(-1, "fsnotify event:", e)
 			}
+			if e.IsAttrib() {
+				continue
+			}
 			names <- path
 			if e.IsCreate() {
 				if err := filepath.Walk(path, walker(watcher)); err != nil {
