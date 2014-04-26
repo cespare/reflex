@@ -46,7 +46,7 @@ func walker(watcher *fsnotify.Watcher) filepath.WalkFunc {
 		}
 		if err := watcher.Watch(path); err != nil {
 			// TODO: handle this somehow?
-			infoPrintf(-1, "Error while watching new path %s: %s\n", path, err)
+			infoPrintf(-1, "Error while watching new path %s: %s", path, err)
 		}
 		return nil
 	}
@@ -63,18 +63,21 @@ func broadcast(in <-chan string, outs []chan<- string) {
 func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done chan<- error) {
 	if err := filepath.Walk(root, walker(watcher)); err != nil {
 		// TODO: handle this somehow?
-		infoPrintf(-1, "Error while walking path %s: %s\n", root, err)
+		infoPrintf(-1, "Error while walking path %s: %s", root, err)
 	}
 
 	for {
 		select {
 		case e := <-watcher.Event:
 			path := strings.TrimPrefix(e.Name, "./")
+			if verbose {
+				infoPrintln(-1, "fsnotify event:", e)
+			}
 			names <- path
 			if e.IsCreate() {
 				if err := filepath.Walk(path, walker(watcher)); err != nil {
 					// TODO: handle this somehow?
-					infoPrintf(-1, "Error while walking path %s: %s\n", path, err)
+					infoPrintf(-1, "Error while walking path %s: %s", path, err)
 				}
 			}
 			if e.IsDelete() {
@@ -282,7 +285,9 @@ func printMsg(msg OutMsg, writer io.Writer) {
 	if decoration == DecorationFancy {
 		fmt.Fprintf(writer, "\x1b[m")
 	}
-	fmt.Fprintln(writer)
+	if !strings.HasSuffix(msg.message, "\n") {
+		fmt.Fprintln(writer)
+	}
 }
 
 func printOutput(out <-chan OutMsg, outWriter io.Writer) {
