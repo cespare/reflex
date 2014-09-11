@@ -5,7 +5,7 @@ package main
 // sequences) in the command, then we only need to preserve one of the paths. If there is a {}, then we need
 // to preserve each unique path in the backlog.
 type Backlog interface {
-	// Add a path to the backlog
+	// Add a path to the backlog.
 	Add(path string)
 	// Show what path should be processed next (without removing it from the backlog).
 	Next() string
@@ -13,14 +13,17 @@ type Backlog interface {
 	RemoveOne() (empty bool)
 }
 
+// A UnifiedBacklog only remembers one backlog item at a time.
 type UnifiedBacklog string
 
+// Add adds path to b if there is not a path there currently. Otherwise it discards it.
 func (b *UnifiedBacklog) Add(path string) {
 	if b == nil {
 		*b = UnifiedBacklog(path)
 	}
 }
 
+// Next returns the path in b.
 func (b *UnifiedBacklog) Next() string {
 	if b == nil {
 		panic("Next() called on empty backlog")
@@ -28,6 +31,7 @@ func (b *UnifiedBacklog) Next() string {
 	return string(*b)
 }
 
+// RemoveOne removes the path in b.
 func (b *UnifiedBacklog) RemoveOne() bool {
 	if b == nil {
 		panic("RemoveOne() called on empty backlog")
@@ -36,12 +40,14 @@ func (b *UnifiedBacklog) RemoveOne() bool {
 	return true
 }
 
+// A UniqueFilesBacklog keeps a set of the paths it has received.
 type UniqueFilesBacklog struct {
 	empty bool
 	next  string
 	rest  map[string]struct{}
 }
 
+// Add adds path to the set of files in b.
 func (b *UniqueFilesBacklog) Add(path string) {
 	defer func() { b.empty = false }()
 	if b.empty {
@@ -54,6 +60,7 @@ func (b *UniqueFilesBacklog) Add(path string) {
 	b.rest[path] = struct{}{}
 }
 
+// Next returns one of the paths in b.
 func (b *UniqueFilesBacklog) Next() string {
 	if b.empty {
 		panic("Next() called on empty backlog")
@@ -61,6 +68,7 @@ func (b *UniqueFilesBacklog) Next() string {
 	return b.next
 }
 
+// RemoveOne removes one of the paths from b (the same path that was returned by a preceding call to Next).
 func (b *UniqueFilesBacklog) RemoveOne() bool {
 	if b.empty {
 		panic("RemoveOne() called on empty backlog")
