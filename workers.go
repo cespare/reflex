@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,24 +16,6 @@ import (
 )
 
 var seqCommands = &sync.Mutex{}
-
-type OutMsg struct {
-	reflexID int
-	message  string
-}
-
-const (
-	// ANSI colors -- using 32 - 36
-	colorStart = 32
-	numColors  = 5
-)
-
-func infoPrintln(id int, args ...interface{}) {
-	stdout <- OutMsg{id, strings.TrimSpace(fmt.Sprintln(args...))}
-}
-func infoPrintf(id int, format string, args ...interface{}) {
-	stdout <- OutMsg{id, fmt.Sprintf(format, args...)}
-}
 
 func walker(watcher *fsnotify.Watcher) filepath.WalkFunc {
 	return func(path string, f os.FileInfo, err error) error {
@@ -263,38 +244,4 @@ func runCommand(reflex *Reflex, name string, stdout chan<- OutMsg) {
 			seqCommands.Unlock()
 		}
 	}()
-}
-
-func printMsg(msg OutMsg, writer io.Writer) {
-	tag := ""
-	if decoration == DecorationFancy || decoration == DecorationPlain {
-		if msg.reflexID < 0 {
-			tag = "[info]"
-		} else {
-			tag = fmt.Sprintf("[%02d]", msg.reflexID)
-		}
-	}
-
-	if decoration == DecorationFancy {
-		color := (msg.reflexID % numColors) + colorStart
-		if reflexID < 0 {
-			color = 31 // red
-		}
-		fmt.Fprintf(writer, "\x1b[01;%dm%s ", color, tag)
-	} else if decoration == DecorationPlain {
-		fmt.Fprintf(writer, tag+" ")
-	}
-	fmt.Fprint(writer, msg.message)
-	if decoration == DecorationFancy {
-		fmt.Fprintf(writer, "\x1b[m")
-	}
-	if !strings.HasSuffix(msg.message, "\n") {
-		fmt.Fprintln(writer)
-	}
-}
-
-func printOutput(out <-chan OutMsg, outWriter io.Writer) {
-	for msg := range out {
-		printMsg(msg, outWriter)
-	}
 }

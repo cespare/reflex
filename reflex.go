@@ -19,17 +19,7 @@ import (
 	shellquote "github.com/kballard/go-shellquote"
 )
 
-const (
-	defaultSubSymbol = "{}"
-)
-
-type Decoration int
-
-const (
-	DecorationNone = iota
-	DecorationPlain
-	DecorationFancy
-)
+const defaultSubSymbol = "{}"
 
 var (
 	reflexes []*Reflex
@@ -141,11 +131,6 @@ func parseMatchers(rs, gs string) (regex *regexp.Regexp, glob string, err error)
 		return regex, "", nil
 	}
 	return nil, "", errors.New("Both regex and glob specified.")
-}
-
-func Fatalln(args ...interface{}) {
-	fmt.Println(args...)
-	os.Exit(1)
 }
 
 // This ties together a single reflex 'instance' so that multiple watches/commands can be handled together
