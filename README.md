@@ -217,7 +217,6 @@ confused, it can help to use `--verbose` (`-v`) which will print out each comman
 * Implement recursive globbing (globstar). (Actually fairly tricky.)
 * Implement/copy the parts of go-shellquote that I need myself.
 * Consider vendoring all the deps.
-* Fix/remove TODOs.
 
 ## The competition
 

@@ -20,13 +20,9 @@ var seqCommands = &sync.Mutex{}
 func walker(watcher *fsnotify.Watcher) filepath.WalkFunc {
 	return func(path string, f os.FileInfo, err error) error {
 		if err != nil || !f.IsDir() {
-			// TODO: Is there some other thing we should be doing to handle errors? When watching large
-			// directories that have lots of programs modifying them (esp. if they're making tempfiles along the
-			// way), we often get errors.
 			return nil
 		}
 		if err := watcher.Watch(path); err != nil {
-			// TODO: handle this somehow?
 			infoPrintf(-1, "Error while watching new path %s: %s", path, err)
 		}
 		return nil
@@ -43,7 +39,6 @@ func broadcast(in <-chan string, outs []chan<- string) {
 
 func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done chan<- error) {
 	if err := filepath.Walk(root, walker(watcher)); err != nil {
-		// TODO: handle this somehow?
 		infoPrintf(-1, "Error while walking path %s: %s", root, err)
 	}
 
@@ -60,7 +55,6 @@ func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done cha
 			names <- path
 			if e.IsCreate() {
 				if err := filepath.Walk(path, walker(watcher)); err != nil {
-					// TODO: handle this somehow?
 					infoPrintf(-1, "Error while walking path %s: %s", path, err)
 				}
 			}
@@ -91,7 +85,7 @@ func filterMatching(in <-chan string, out chan<- string, reflex *Reflex) {
 				continue
 			}
 		}
-		// TODO: These only match if the file/dir still exists...not sure if there's a better way.
+
 		if reflex.onlyFiles || reflex.onlyDirs {
 			stat, err := os.Stat(name)
 			if err != nil {
@@ -180,8 +174,7 @@ func terminate(reflex *Reflex) {
 			// the process may have created.
 			if err := syscall.Kill(-1*reflex.cmd.Process.Pid, sig); err != nil {
 				infoPrintln(reflex.id, "Error killing:", err)
-				// TODO: is there a better way to detect this?
-				if err.Error() == "no such process" {
+				if err.(syscall.Errno) == syscall.ESRCH { // "no such process"
 					return
 				}
 			}
