@@ -52,7 +52,6 @@ func TestReadConfigs(t *testing.T) {
 func TestReadConfigsBad(t *testing.T) {
 	for _, in := range []string{
 		"",
-		"-r a -g b echo hello",
 		"--abc echo hi",
 		"-g '*.go'",
 		"--substitute='' echo hi",
@@ -63,7 +62,7 @@ func TestReadConfigsBad(t *testing.T) {
 		if err == nil {
 			for _, config := range configs {
 				_, err := NewReflex(config)
-				assert(t, err != nil, "expected nil; got %#v", err)
+				assert(t, err != nil, "expected nil; got %#v (%q)", err, in)
 			}
 		}
 	}

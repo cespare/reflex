@@ -1,11 +1,9 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"os/signal"
-	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -19,7 +17,6 @@ const defaultSubSymbol = "{}"
 
 var (
 	reflexes []*Reflex
-	matchAll = regexp.MustCompile(".*")
 
 	flagConf       string
 	flagSequential bool
@@ -84,23 +81,6 @@ func anyNonGlobalsRegistered() bool {
 	}
 	globalFlags.Visit(walkFn)
 	return any
-}
-
-func parseMatchers(rs, gs string) (regex *regexp.Regexp, glob string, err error) {
-	if rs == "" && gs == "" {
-		return matchAll, "", nil
-	}
-	if rs == "" {
-		return nil, gs, nil
-	}
-	if gs == "" {
-		regex, err := regexp.Compile(rs)
-		if err != nil {
-			return nil, "", err
-		}
-		return regex, "", nil
-	}
-	return nil, "", errors.New("Both regex and glob specified.")
 }
 
 func printGlobals() {

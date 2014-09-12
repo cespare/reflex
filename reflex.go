@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -23,9 +21,8 @@ type Reflex struct {
 	source       string // Describes what config/line defines this Reflex
 	startService bool
 	backlog      Backlog
-	regex        *regexp.Regexp
-	glob         string
-	useRegex     bool
+	matcher      MatchingFxn
+	matcherInfo  string
 	onlyFiles    bool
 	onlyDirs     bool
 	command      []string
@@ -44,7 +41,7 @@ type Reflex struct {
 
 // NewReflex prepares a Reflex from a Config, with sanity checking.
 func NewReflex(c *Config) (*Reflex, error) {
-	regex, glob, err := parseMatchers(c.regex, c.glob)
+	matcher, matcherInfo, err := ParseMatchers(c.regex, c.glob, c.invertRegex, c.invertGlob)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing glob/regex: %s", err)
 	}
@@ -83,9 +80,8 @@ func NewReflex(c *Config) (*Reflex, error) {
 		source:       c.source,
 		startService: c.startService,
 		backlog:      backlog,
-		regex:        regex,
-		glob:         glob,
-		useRegex:     regex != nil,
+		matcher:      matcher,
+		matcherInfo:  matcherInfo,
 		onlyFiles:    c.onlyFiles,
 		onlyDirs:     c.onlyDirs,
 		command:      c.command,
@@ -105,13 +101,7 @@ func (r *Reflex) String() string {
 	var buf bytes.Buffer
 	fmt.Fprintln(&buf, "Reflex from", r.source)
 	fmt.Fprintln(&buf, "| ID:", r.id)
-	if r.regex == matchAll {
-		fmt.Fprintln(&buf, "| No regex (-r) or glob (-g) given, so matching all file changes.")
-	} else if r.useRegex {
-		fmt.Fprintln(&buf, "| Regex:", r.regex)
-	} else {
-		fmt.Fprintln(&buf, "| Glob:", r.glob)
-	}
+	fmt.Fprintln(&buf, r.matcherInfo)
 	if r.onlyFiles {
 		fmt.Fprintln(&buf, "| Only matching files.")
 	} else if r.onlyDirs {
@@ -133,19 +123,8 @@ func (r *Reflex) String() string {
 // filterMatching passes on messages matching the regex/glob.
 func (r *Reflex) filterMatching(out chan<- string, in <-chan string) {
 	for name := range in {
-		if r.useRegex {
-			if !r.regex.MatchString(name) {
-				continue
-			}
-		} else {
-			matches, err := filepath.Match(r.glob, name)
-			if err != nil {
-				infoPrintln(r.id, "Error matching glob:", err)
-				continue
-			}
-			if !matches {
-				continue
-			}
+		if !r.matcher(name) {
+			continue
 		}
 
 		if r.onlyFiles || r.onlyDirs {

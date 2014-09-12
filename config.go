@@ -18,6 +18,8 @@ type Config struct {
 
 	regex        string
 	glob         string
+	invertRegex  string
+	invertGlob   string
 	subSymbol    string
 	startService bool
 	onlyFiles    bool
@@ -27,8 +29,12 @@ type Config struct {
 func (c *Config) registerFlags(f *flag.FlagSet) {
 	f.StringVarP(&c.regex, "regex", "r", "", `
             A regular expression to match filenames.`)
+	f.StringVarP(&c.invertRegex, "invertRegex", "R", "", `
+	          A regular expression to exclude matching filenames.`)
 	f.StringVarP(&c.glob, "glob", "g", "", `
             A shell glob expression to match filenames.`)
+	f.StringVarP(&c.invertGlob, "invertGlob", "G", "", `
+	          A shell glob expression to exclude matching filenames.`)
 	f.StringVar(&c.subSymbol, "substitute", defaultSubSymbol, `
             The substitution symbol that is replaced with the filename
             in a command.`)
