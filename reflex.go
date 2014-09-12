@@ -243,7 +243,7 @@ func cleanup(reason string) {
 	}
 	wg.Wait()
 	// Give just a little time to finish printing output.
-	<-time.NewTimer(10 * time.Millisecond).C
+	time.Sleep(10 * time.Millisecond)
 	os.Exit(0)
 }
 
