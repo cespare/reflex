@@ -1,111 +1,23 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
-	"os/signal"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
 
-	flag "github.com/cespare/pflag"
-	"gopkg.in/fsnotify.v1"
+	"github.com/kr/pty"
 )
 
-const defaultSubSymbol = "{}"
-
-var (
-	reflexes []*Reflex
-	matchAll = regexp.MustCompile(".*")
-
-	flagConf       string
-	flagSequential bool
-	flagDecoration string
-	decoration     Decoration
-	verbose        bool
-	globalFlags    = flag.NewFlagSet("", flag.ContinueOnError)
-	globalConfig   = &Config{}
-
-	reflexID = 0
-	stdout   = make(chan OutMsg, 1)
-
-	cleanupMu = &sync.Mutex{}
-)
-
-func usage() {
-	fmt.Fprintf(os.Stderr, `Usage: %s [OPTIONS] [COMMAND]
-
-COMMAND is any command you'd like to run. Any instance of {} will be replaced
-with the filename of the changed file. (The symbol may be changed with the
---substitute flag.)
-
-OPTIONS are given below:
-`, os.Args[0])
-
-	globalFlags.PrintDefaults()
-
-	fmt.Fprintln(os.Stderr, `
-Examples:
-
-    # Print each .txt file if it changes
-    $ reflex -r '\.txt$' echo {}
-
-    # Run 'make' if any of the .c files in this directory change:
-    $ reflex -g '*.c' make
-
-    # Build and run a server; rebuild and restart when .java files change:
-    $ reflex -r '\.java$' -s -- sh -c 'make && java bin/Server'
-`)
-}
-
-func init() {
-	globalFlags.Usage = usage
-	globalFlags.StringVarP(&flagConf, "config", "c", "", `
-            A configuration file that describes how to run reflex
-            (or '-' to read the configuration from stdin).`)
-	globalFlags.BoolVarP(&verbose, "verbose", "v", false, `
-            Verbose mode: print out more information about what reflex is doing.`)
-	globalFlags.BoolVarP(&flagSequential, "sequential", "e", false, `
-            Don't run multiple commands at the same time.`)
-	globalFlags.StringVarP(&flagDecoration, "decoration", "d", "plain", `
-            How to decorate command output. Choices: none, plain, fancy.`)
-	globalConfig.registerFlags(globalFlags)
-}
-
-func anyNonGlobalsRegistered() bool {
-	any := false
-	walkFn := func(f *flag.Flag) {
-		if !(f.Name == "config" || f.Name == "verbose" || f.Name == "sequential" || f.Name == "decoration") {
-			any = any || true
-		}
-	}
-	globalFlags.Visit(walkFn)
-	return any
-}
-
-func parseMatchers(rs, gs string) (regex *regexp.Regexp, glob string, err error) {
-	if rs == "" && gs == "" {
-		return matchAll, "", nil
-	}
-	if rs == "" {
-		return nil, gs, nil
-	}
-	if gs == "" {
-		regex, err := regexp.Compile(rs)
-		if err != nil {
-			return nil, "", err
-		}
-		return regex, "", nil
-	}
-	return nil, "", errors.New("Both regex and glob specified.")
-}
-
-// This ties together a single reflex 'instance' so that multiple watches/commands can be handled together
-// easily.
+// A Reflex is a single watch + command to execute.
 type Reflex struct {
 	id           int
 	source       string // Describes what config/line defines this Reflex
@@ -119,10 +31,9 @@ type Reflex struct {
 	command      []string
 	subSymbol    string
 
-	done       chan struct{}
-	rawChanges chan string
-	filtered   chan string
-	batched    chan string
+	done     chan struct{}
+	filtered chan string
+	batched  chan string
 
 	// Used for services (startService = true)
 	cmd    *exec.Cmd
@@ -180,9 +91,8 @@ func NewReflex(c *Config) (*Reflex, error) {
 		command:      c.command,
 		subSymbol:    c.subSymbol,
 
-		rawChanges: make(chan string),
-		filtered:   make(chan string),
-		batched:    make(chan string),
+		filtered: make(chan string),
+		batched:  make(chan string),
 
 		mu: &sync.Mutex{},
 	}
@@ -191,150 +101,216 @@ func NewReflex(c *Config) (*Reflex, error) {
 	return reflex, nil
 }
 
-func (r *Reflex) PrintInfo() {
-	fmt.Println("Reflex from", r.source)
-	fmt.Println("| ID:", r.id)
+func (r *Reflex) String() string {
+	var buf bytes.Buffer
+	fmt.Fprintln(&buf, "Reflex from", r.source)
+	fmt.Fprintln(&buf, "| ID:", r.id)
 	if r.regex == matchAll {
-		fmt.Println("| No regex (-r) or glob (-g) given, so matching all file changes.")
+		fmt.Fprintln(&buf, "| No regex (-r) or glob (-g) given, so matching all file changes.")
 	} else if r.useRegex {
-		fmt.Println("| Regex:", r.regex)
+		fmt.Fprintln(&buf, "| Regex:", r.regex)
 	} else {
-		fmt.Println("| Glob:", r.glob)
+		fmt.Fprintln(&buf, "| Glob:", r.glob)
 	}
 	if r.onlyFiles {
-		fmt.Println("| Only matching files.")
+		fmt.Fprintln(&buf, "| Only matching files.")
 	} else if r.onlyDirs {
-		fmt.Println("| Only matching directories.")
+		fmt.Fprintln(&buf, "| Only matching directories.")
 	}
 	if !r.startService {
-		fmt.Println("| Substitution symbol", r.subSymbol)
+		fmt.Fprintln(&buf, "| Substitution symbol", r.subSymbol)
 	}
 	replacer := strings.NewReplacer(r.subSymbol, "<filename>")
 	command := make([]string, len(r.command))
 	for i, part := range r.command {
 		command[i] = replacer.Replace(part)
 	}
-	fmt.Println("| Command:", command)
-	fmt.Println("+---------")
+	fmt.Fprintln(&buf, "| Command:", command)
+	fmt.Fprintln(&buf, "+---------")
+	return buf.String()
 }
 
-func printGlobals() {
-	fmt.Println("Globals set at commandline")
-	walkFn := func(f *flag.Flag) {
-		fmt.Printf("| --%s (-%s) '%s' (default: '%s')\n", f.Name, f.Shorthand, f.Value, f.DefValue)
+// filterMatching passes on messages matching the regex/glob.
+func (r *Reflex) filterMatching(out chan<- string, in <-chan string) {
+	for name := range in {
+		if r.useRegex {
+			if !r.regex.MatchString(name) {
+				continue
+			}
+		} else {
+			matches, err := filepath.Match(r.glob, name)
+			if err != nil {
+				infoPrintln(r.id, "Error matching glob:", err)
+				continue
+			}
+			if !matches {
+				continue
+			}
+		}
+
+		if r.onlyFiles || r.onlyDirs {
+			stat, err := os.Stat(name)
+			if err != nil {
+				continue
+			}
+			if (r.onlyFiles && stat.IsDir()) || (r.onlyDirs && !stat.IsDir()) {
+				continue
+			}
+		}
+		out <- name
 	}
-	globalFlags.Visit(walkFn)
-	fmt.Println("+---------")
 }
 
-func cleanup(reason string) {
-	cleanupMu.Lock()
-	fmt.Println(reason)
-	wg := &sync.WaitGroup{}
-	for _, reflex := range reflexes {
-		if reflex.done != nil {
-			wg.Add(1)
-			go func(reflex *Reflex) {
-				terminate(reflex)
-				wg.Done()
-			}(reflex)
+// batch receives realtime file notification events and batches them up. It's a bit tricky, but here's what
+// it accomplishes:
+// * When we initially get a message, wait a bit and batch messages before trying to send anything. This is
+//	 because the file events come in quick bursts.
+// * Once it's time to send, don't do it until the out channel is unblocked. In the meantime, keep batching.
+//   When we've sent off all the batched messages, go back to the beginning.
+func (r *Reflex) batch(out chan<- string, in <-chan string) {
+	for name := range in {
+		r.backlog.Add(name)
+		timer := time.NewTimer(300 * time.Millisecond)
+	outer:
+		for {
+			select {
+			case name := <-in:
+				r.backlog.Add(name)
+			case <-timer.C:
+				for {
+					select {
+					case name := <-in:
+						r.backlog.Add(name)
+					case out <- r.backlog.Next():
+						if r.backlog.RemoveOne() {
+							break outer
+						}
+					}
+				}
+			}
 		}
 	}
-	wg.Wait()
-	// Give just a little time to finish printing output.
-	time.Sleep(10 * time.Millisecond)
-	os.Exit(0)
 }
 
-func main() {
-	if err := globalFlags.Parse(os.Args[1:]); err != nil {
-		Fatalln(err)
+// runEach runs the command on each name that comes through the names channel. Each {} is replaced by the name
+// of the file. The output of the command is passed line-by-line to the stdout chan.
+func (r *Reflex) runEach(names <-chan string) {
+	for name := range names {
+		if r.startService {
+			if r.done != nil {
+				infoPrintln(r.id, "Killing service")
+				r.terminate()
+			}
+			infoPrintln(r.id, "Starting service")
+			r.runCommand(name, stdout)
+		} else {
+			r.runCommand(name, stdout)
+			<-r.done
+			r.done = nil
+		}
 	}
-	globalConfig.command = globalFlags.Args()
-	globalConfig.source = "[commandline]"
-	if verbose {
-		printGlobals()
+}
+
+func (r *Reflex) terminate() {
+	r.mu.Lock()
+	r.killed = true
+	r.mu.Unlock()
+	// Write ascii 3 (what you get from ^C) to the controlling pty.
+	// (This won't do anything if the process already died as the write will simply fail.)
+	r.tty.Write([]byte{3})
+
+	timer := time.NewTimer(500 * time.Millisecond)
+	sig := syscall.SIGINT
+	for {
+		select {
+		case <-r.done:
+			return
+		case <-timer.C:
+			if sig == syscall.SIGINT {
+				infoPrintln(r.id, "Sending SIGINT signal...")
+			} else {
+				infoPrintln(r.id, "Sending SIGKILL signal...")
+			}
+
+			// Instead of killing the process, we want to kill its whole pgroup in order to clean up any children
+			// the process may have created.
+			if err := syscall.Kill(-1*r.cmd.Process.Pid, sig); err != nil {
+				infoPrintln(r.id, "Error killing:", err)
+				if err.(syscall.Errno) == syscall.ESRCH { // "no such process"
+					return
+				}
+			}
+			// After SIGINT doesn't do anything, try SIGKILL next.
+			timer.Reset(500 * time.Millisecond)
+			sig = syscall.SIGKILL
+		}
 	}
-	switch strings.ToLower(flagDecoration) {
-	case "none":
-		decoration = DecorationNone
-	case "plain":
-		decoration = DecorationPlain
-	case "fancy":
-		decoration = DecorationFancy
-	default:
-		Fatalln(fmt.Sprintf("Invalid decoration %s. Choices: none, plain, fancy.", flagDecoration))
+}
+
+func replaceSubSymbol(command []string, subSymbol string, name string) []string {
+	replacer := strings.NewReplacer(subSymbol, name)
+	newCommand := make([]string, len(command))
+	for i, c := range command {
+		newCommand[i] = replacer.Replace(c)
+	}
+	return newCommand
+}
+
+var seqCommands = &sync.Mutex{}
+
+// runCommand runs the given Command. All output is passed line-by-line to the stdout channel.
+func (r *Reflex) runCommand(name string, stdout chan<- OutMsg) {
+	command := replaceSubSymbol(r.command, r.subSymbol, name)
+	cmd := exec.Command(command[0], command[1:]...)
+	r.cmd = cmd
+
+	if flagSequential {
+		seqCommands.Lock()
 	}
 
-	var configs []*Config
-	if flagConf == "" {
-		if flagSequential {
-			Fatalln("Cannot set --sequential without --config (because you cannot specify multiple commands).")
-		}
-		configs = []*Config{globalConfig}
-	} else {
-		if anyNonGlobalsRegistered() {
-			Fatalln("Cannot set other flags along with --config other than --sequential, --verbose, and --decoration.")
-		}
-		var err error
-		configs, err = ReadConfigs(flagConf)
-		if err != nil {
-			Fatalln("Could not parse configs: ", err)
-		}
-		if len(configs) == 0 {
-			Fatalln("No configurations found")
-		}
-	}
-
-	for _, config := range configs {
-		reflex, err := NewReflex(config)
-		if err != nil {
-			Fatalln("Could not make reflex for config:", err)
-		}
-		if verbose {
-			reflex.PrintInfo()
-		}
-		reflexes = append(reflexes, reflex)
-	}
-
-	// Catch ctrl-c and make sure to kill off children.
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, os.Interrupt)
-	signal.Notify(signals, os.Signal(syscall.SIGTERM))
-	go func() {
-		s := <-signals
-		reason := fmt.Sprintf("Interrupted (%s). Cleaning up children...", s)
-		cleanup(reason)
-	}()
-	defer cleanup("Cleaning up.")
-
-	watcher, err := fsnotify.NewWatcher()
+	tty, err := pty.Start(cmd)
 	if err != nil {
-		Fatalln(err)
+		infoPrintln(r.id, err)
+		return
 	}
-	defer watcher.Close()
+	r.tty = tty
 
-	rawChanges := make(chan string)
-	allRawChanges := make([]chan<- string, len(reflexes))
-	done := make(chan error)
-	for i, reflex := range reflexes {
-		allRawChanges[i] = reflex.rawChanges
-	}
-	go watch(".", watcher, rawChanges, done)
-	go broadcast(rawChanges, allRawChanges)
-
-	go printOutput(stdout, os.Stdout)
-
-	for _, reflex := range reflexes {
-		go filterMatching(reflex.rawChanges, reflex.filtered, reflex)
-		go batch(reflex.filtered, reflex.batched, reflex)
-		go runEach(reflex.batched, reflex)
-		if reflex.startService {
-			// Easy hack to kick off the initial start.
-			infoPrintln(reflex.id, "Starting service")
-			runCommand(reflex, "", stdout)
+	go func() {
+		scanner := bufio.NewScanner(tty)
+		for scanner.Scan() {
+			stdout <- OutMsg{r.id, scanner.Text()}
 		}
-	}
+		// Intentionally ignoring scanner.Err() for now.
+		// Unfortunately, the pty returns a read error when the child dies naturally, so I'm just going to ignore
+		// errors here unless I can find a better way to handle it.
+	}()
 
-	Fatalln(<-done)
+	done := make(chan struct{})
+	r.done = done
+	go func() {
+		err := cmd.Wait()
+		r.mu.Lock()
+		killed := r.killed
+		r.mu.Unlock()
+		if !killed && err != nil {
+			stdout <- OutMsg{r.id, fmt.Sprintf("(error exit: %s)", err)}
+		}
+		done <- struct{}{}
+		if flagSequential {
+			seqCommands.Unlock()
+		}
+	}()
+}
+
+func (r *Reflex) Start(changes <-chan string) {
+	filtered := make(chan string)
+	batched := make(chan string)
+	go r.filterMatching(filtered, changes)
+	go r.batch(batched, filtered)
+	go r.runEach(batched)
+	if r.startService {
+		// Easy hack to kick off the initial start.
+		infoPrintln(r.id, "Starting service")
+		r.runCommand("", stdout)
+	}
 }
