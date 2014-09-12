@@ -156,9 +156,9 @@ func runEach(names <-chan string, reflex *Reflex) {
 }
 
 func terminate(reflex *Reflex) {
-	reflex.mut.Lock()
+	reflex.mu.Lock()
 	reflex.killed = true
-	reflex.mut.Unlock()
+	reflex.mu.Unlock()
 	// Write ascii 3 (what you get from ^C) to the controlling pty.
 	// (This won't do anything if the process already died as the write will simply fail.)
 	reflex.tty.Write([]byte{3})
@@ -232,9 +232,9 @@ func runCommand(reflex *Reflex, name string, stdout chan<- OutMsg) {
 	reflex.done = done
 	go func() {
 		err := cmd.Wait()
-		reflex.mut.Lock()
+		reflex.mu.Lock()
 		killed := reflex.killed
-		reflex.mut.Unlock()
+		reflex.mu.Unlock()
 		if !killed && err != nil {
 			stdout <- OutMsg{reflex.id, fmt.Sprintf("(error exit: %s)", err)}
 		}

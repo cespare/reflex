@@ -33,7 +33,7 @@ var (
 	reflexID = 0
 	stdout   = make(chan OutMsg, 1)
 
-	cleanupMut = &sync.Mutex{}
+	cleanupMu = &sync.Mutex{}
 )
 
 func usage() {
@@ -127,7 +127,7 @@ type Reflex struct {
 	// Used for services (startService = true)
 	cmd    *exec.Cmd
 	tty    *os.File
-	mut    *sync.Mutex // protects killed
+	mu     *sync.Mutex // protects killed
 	killed bool
 }
 
@@ -184,7 +184,7 @@ func NewReflex(c *Config) (*Reflex, error) {
 		filtered:   make(chan string),
 		batched:    make(chan string),
 
-		mut: &sync.Mutex{},
+		mu: &sync.Mutex{},
 	}
 	reflexID++
 
@@ -228,8 +228,8 @@ func printGlobals() {
 }
 
 func cleanup(reason string) {
-	cleanupMut.Lock()
-	defer cleanupMut.Unlock()
+	cleanupMu.Lock()
+	defer cleanupMu.Unlock()
 	fmt.Println(reason)
 	wg := &sync.WaitGroup{}
 	for _, reflex := range reflexes {
