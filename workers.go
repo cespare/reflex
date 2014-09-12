@@ -54,12 +54,15 @@ func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done cha
 			}
 			names <- path
 			if e.IsCreate() {
+				fmt.Printf("\033[01;34m>>>> creating watch for path: %v\x1B[m\n", path)
 				if err := filepath.Walk(path, walker(watcher)); err != nil {
 					infoPrintf(-1, "Error while walking path %s: %s", path, err)
 				}
 			}
 			if e.IsDelete() {
-				watcher.RemoveWatch(path)
+				fmt.Printf("\033[01;34m>>>> deleting path: %v\x1B[m\n", path)
+				err := watcher.RemoveWatch(path)
+				fmt.Printf("\033[01;34m>>>> err: %v\x1B[m\n", err)
 			}
 		case err := <-watcher.Error:
 			done <- err
