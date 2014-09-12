@@ -1,10 +1,8 @@
 package main
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -16,7 +14,6 @@ import (
 
 	flag "github.com/cespare/pflag"
 	"github.com/howeyc/fsnotify"
-	shellquote "github.com/kballard/go-shellquote"
 )
 
 const defaultSubSymbol = "{}"
@@ -38,15 +35,6 @@ var (
 
 	cleanupMut = &sync.Mutex{}
 )
-
-type Config struct {
-	regex        string
-	glob         string
-	subSymbol    string
-	startService bool
-	onlyFiles    bool
-	onlyDirs     bool
-}
 
 func usage() {
 	fmt.Fprintf(os.Stderr, `Usage: %s [OPTIONS] [COMMAND]
@@ -85,24 +73,7 @@ func init() {
             Don't run multiple commands at the same time.`)
 	globalFlags.StringVarP(&flagDecoration, "decoration", "d", "plain", `
             How to decorate command output. Choices: none, plain, fancy.`)
-	registerFlags(globalFlags, globalConfig)
-}
-
-func registerFlags(f *flag.FlagSet, config *Config) {
-	f.StringVarP(&config.regex, "regex", "r", "", `
-            A regular expression to match filenames.`)
-	f.StringVarP(&config.glob, "glob", "g", "", `
-            A shell glob expression to match filenames.`)
-	f.StringVar(&config.subSymbol, "substitute", defaultSubSymbol, `
-            The substitution symbol that is replaced with the filename
-            in a command.`)
-	f.BoolVarP(&config.startService, "start-service", "s", false, `
-            Indicates that the command is a long-running process to be
-            restarted on matching changes.`)
-	f.BoolVar(&config.onlyFiles, "only-files", false, `
-            Only match files (not directories).`)
-	f.BoolVar(&config.onlyDirs, "only-dirs", false, `
-            Only match directories (not files).`)
+	globalConfig.registerFlags(globalFlags)
 }
 
 func anyNonGlobalsRegistered() bool {
@@ -137,6 +108,7 @@ func parseMatchers(rs, gs string) (regex *regexp.Regexp, glob string, err error)
 // easily.
 type Reflex struct {
 	id           int
+	source       string // Describes what config/line defines this Reflex
 	startService bool
 	backlog      Backlog
 	regex        *regexp.Regexp
@@ -160,12 +132,12 @@ type Reflex struct {
 }
 
 // This function is not threadsafe.
-func NewReflex(c *Config, command []string) (*Reflex, error) {
+func NewReflex(c *Config) (*Reflex, error) {
 	regex, glob, err := parseMatchers(c.regex, c.glob)
 	if err != nil {
 		Fatalln("Error parsing glob/regex.\n" + err.Error())
 	}
-	if len(command) == 0 {
+	if len(c.command) == 0 {
 		return nil, errors.New("Must give command to execute.")
 	}
 
@@ -174,7 +146,7 @@ func NewReflex(c *Config, command []string) (*Reflex, error) {
 	}
 
 	substitution := false
-	for _, part := range command {
+	for _, part := range c.command {
 		if strings.Contains(part, c.subSymbol) {
 			substitution = true
 			break
@@ -197,6 +169,7 @@ func NewReflex(c *Config, command []string) (*Reflex, error) {
 
 	reflex := &Reflex{
 		id:           reflexID,
+		source:       c.source,
 		startService: c.startService,
 		backlog:      backlog,
 		regex:        regex,
@@ -204,7 +177,7 @@ func NewReflex(c *Config, command []string) (*Reflex, error) {
 		useRegex:     regex != nil,
 		onlyFiles:    c.onlyFiles,
 		onlyDirs:     c.onlyDirs,
-		command:      command,
+		command:      c.command,
 		subSymbol:    c.subSymbol,
 
 		rawChanges: make(chan string),
@@ -218,8 +191,8 @@ func NewReflex(c *Config, command []string) (*Reflex, error) {
 	return reflex, nil
 }
 
-func (r *Reflex) PrintInfo(source string) {
-	fmt.Println("Reflex from", source)
+func (r *Reflex) PrintInfo() {
+	fmt.Println("Reflex from", r.source)
 	fmt.Println("| ID:", r.id)
 	if r.regex == matchAll {
 		fmt.Println("| No regex (-r) or glob (-g) given, so matching all file changes.")
@@ -278,6 +251,8 @@ func main() {
 	if err := globalFlags.Parse(os.Args[1:]); err != nil {
 		Fatalln(err)
 	}
+	globalConfig.command = globalFlags.Args()
+	globalConfig.source = "[commandline]"
 	if verbose {
 		printGlobals()
 	}
@@ -292,68 +267,32 @@ func main() {
 		Fatalln(fmt.Sprintf("Invalid decoration %s. Choices: none, plain, fancy.", flagDecoration))
 	}
 
+	var configs []*Config
 	if flagConf == "" {
-		reflex, err := NewReflex(globalConfig, globalFlags.Args())
-		if err != nil {
-			Fatalln(err)
-		}
-		if verbose {
-			reflex.PrintInfo("commandline")
-		}
-		reflexes = append(reflexes, reflex)
 		if flagSequential {
 			Fatalln("Cannot set --sequential without --config (because you cannot specify multiple commands).")
 		}
+		configs = []*Config{globalConfig}
 	} else {
 		if anyNonGlobalsRegistered() {
 			Fatalln("Cannot set other flags along with --config other than --sequential, --verbose, and --decoration.")
 		}
+		var err error
+		configs, err = ReadConfigs(flagConf)
+		if err != nil {
+			Fatalln("Could not parse configs: ", err)
+		}
+	}
 
-		// Now open the configuration file.
-		// As a special case we read the config from stdin if --config is set to "-"
-		var config io.ReadCloser
-		if flagConf == "-" {
-			config = os.Stdin
-		} else {
-			configFile, err := os.Open(flagConf)
-			if err != nil {
-				Fatalln(err)
-			}
-			config = configFile
+	for _, config := range configs {
+		reflex, err := NewReflex(config)
+		if err != nil {
+			Fatalln("Could not make reflex for config:", err)
 		}
-
-		scanner := bufio.NewScanner(config)
-		lineNo := 0
-		for scanner.Scan() {
-			lineNo++
-			errorMsg := fmt.Sprintf("Error on line %d of %s:", lineNo, flagConf)
-			config := &Config{}
-			flags := flag.NewFlagSet("", flag.ContinueOnError)
-			registerFlags(flags, config)
-			parts, err := shellquote.Split(scanner.Text())
-			if err != nil {
-				Fatalln(errorMsg, err)
-			}
-			// Skip empty lines and comments (lines starting with #).
-			if len(parts) == 0 || strings.HasPrefix(parts[0], "#") {
-				continue
-			}
-			if err := flags.Parse(parts); err != nil {
-				Fatalln(errorMsg, err)
-			}
-			reflex, err := NewReflex(config, flags.Args())
-			if err != nil {
-				Fatalln(errorMsg, err)
-			}
-			if verbose {
-				reflex.PrintInfo(fmt.Sprintf("%s, line %d", flagConf, lineNo))
-			}
-			reflexes = append(reflexes, reflex)
+		if verbose {
+			reflex.PrintInfo()
 		}
-		if err := scanner.Err(); err != nil {
-			Fatalln(err)
-		}
-		config.Close()
+		reflexes = append(reflexes, reflex)
 	}
 
 	// Catch ctrl-c and make sure to kill off children.

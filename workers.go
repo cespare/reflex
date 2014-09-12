@@ -83,7 +83,6 @@ func filterMatching(in <-chan string, out chan<- string, reflex *Reflex) {
 			}
 		} else {
 			matches, err := filepath.Match(reflex.glob, name)
-			// TODO: It would be good to notify the user on an error here.
 			if err != nil {
 				infoPrintln(reflex.id, "Error matching glob:", err)
 				continue
