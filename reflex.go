@@ -229,7 +229,6 @@ func printGlobals() {
 
 func cleanup(reason string) {
 	cleanupMu.Lock()
-	defer cleanupMu.Unlock()
 	fmt.Println(reason)
 	wg := &sync.WaitGroup{}
 	for _, reflex := range reflexes {
