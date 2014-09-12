@@ -13,7 +13,7 @@ import (
 	"time"
 
 	flag "github.com/cespare/pflag"
-	"github.com/howeyc/fsnotify"
+	"gopkg.in/fsnotify.v1"
 )
 
 const defaultSubSymbol = "{}"

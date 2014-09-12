@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/howeyc/fsnotify"
 	"github.com/kr/pty"
+	"gopkg.in/fsnotify.v1"
 )
 
 var seqCommands = &sync.Mutex{}
@@ -22,7 +22,7 @@ func walker(watcher *fsnotify.Watcher) filepath.WalkFunc {
 		if err != nil || !f.IsDir() {
 			return nil
 		}
-		if err := watcher.Watch(path); err != nil {
+		if err := watcher.Add(path); err != nil {
 			infoPrintf(-1, "Error while watching new path %s: %s", path, err)
 		}
 		return nil
@@ -44,24 +44,25 @@ func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done cha
 
 	for {
 		select {
-		case e := <-watcher.Event:
+		case e := <-watcher.Events:
 			path := strings.TrimPrefix(e.Name, "./")
 			if verbose {
 				infoPrintln(-1, "fsnotify event:", e)
 			}
-			if e.IsAttrib() {
+			if e.Op&fsnotify.Chmod > 0 {
 				continue
 			}
 			names <- path
-			if e.IsCreate() {
+			if e.Op&fsnotify.Create > 0 {
 				if err := filepath.Walk(path, walker(watcher)); err != nil {
 					infoPrintf(-1, "Error while walking path %s: %s", path, err)
 				}
 			}
-			if e.IsDelete() {
-				watcher.RemoveWatch(path)
-			}
-		case err := <-watcher.Error:
+			// TODO: Cannot currently remove fsnotify watches recursively, or for deleted files. See:
+			// https://github.com/cespare/reflex/issues/13
+			// https://github.com/go-fsnotify/fsnotify/issues/40
+			// https://github.com/go-fsnotify/fsnotify/issues/41
+		case err := <-watcher.Errors:
 			done <- err
 			return
 		}
