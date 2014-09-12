@@ -258,7 +258,7 @@ func cleanup(reason string) {
 	cleanupMut.Lock()
 	defer cleanupMut.Unlock()
 	fmt.Println(reason)
-	wg := sync.WaitGroup{}
+	wg := &sync.WaitGroup{}
 	for _, reflex := range reflexes {
 		if reflex.done != nil {
 			wg.Add(1)
