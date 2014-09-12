@@ -34,7 +34,7 @@ var (
 	globalConfig   = &Config{}
 
 	reflexID = 0
-	stdout   = make(chan OutMsg, 100)
+	stdout   = make(chan OutMsg, 1)
 
 	cleanupMut = &sync.Mutex{}
 )
