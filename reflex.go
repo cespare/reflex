@@ -131,18 +131,18 @@ type Reflex struct {
 	killed bool
 }
 
-// This function is not threadsafe.
+// NewReflex prepares a Reflex from a Config, with sanity checking.
 func NewReflex(c *Config) (*Reflex, error) {
 	regex, glob, err := parseMatchers(c.regex, c.glob)
 	if err != nil {
-		Fatalln("Error parsing glob/regex.\n" + err.Error())
+		return nil, fmt.Errorf("error parsing glob/regex: %s", err)
 	}
 	if len(c.command) == 0 {
-		return nil, errors.New("Must give command to execute.")
+		return nil, errors.New("must give command to execute")
 	}
 
 	if c.subSymbol == "" {
-		return nil, errors.New("Substitution symbol must be non-empty.")
+		return nil, errors.New("substitution symbol must be non-empty")
 	}
 
 	substitution := false
@@ -156,7 +156,7 @@ func NewReflex(c *Config) (*Reflex, error) {
 	var backlog Backlog
 	if substitution {
 		if c.startService {
-			return nil, errors.New("Using --start-service does not work with a command that has a substitution symbol.")
+			return nil, errors.New("using --start-service does not work with a command that has a substitution symbol")
 		}
 		backlog = NewUniqueFilesBacklog()
 	} else {
@@ -164,7 +164,7 @@ func NewReflex(c *Config) (*Reflex, error) {
 	}
 
 	if c.onlyFiles && c.onlyDirs {
-		return nil, errors.New("Cannot specify both --only-files and --only-dirs.")
+		return nil, errors.New("cannot specify both --only-files and --only-dirs")
 	}
 
 	reflex := &Reflex{
@@ -280,6 +280,9 @@ func main() {
 		configs, err = ReadConfigs(flagConf)
 		if err != nil {
 			Fatalln("Could not parse configs: ", err)
+		}
+		if len(configs) == 0 {
+			Fatalln("No configurations found")
 		}
 	}
 

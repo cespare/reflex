@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"strings"
 
@@ -55,7 +56,10 @@ func ReadConfigs(path string) ([]*Config, error) {
 		defer f.Close()
 		r = f
 	}
+	return readConfigsFromReader(r, name)
+}
 
+func readConfigsFromReader(r io.Reader, name string) ([]*Config, error) {
 	scanner := bufio.NewScanner(r)
 	lineNo := 0
 	var configs []*Config
@@ -64,6 +68,7 @@ func ReadConfigs(path string) ([]*Config, error) {
 		errorf := fmt.Sprintf("error on line %d of %s: %%s", lineNo, name)
 		c := &Config{}
 		flags := flag.NewFlagSet("", flag.ContinueOnError)
+		flags.SetOutput(ioutil.Discard)
 		c.registerFlags(flags)
 		parts, err := shellquote.Split(scanner.Text())
 		if err != nil {
