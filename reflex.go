@@ -186,9 +186,9 @@ func NewReflex(c *Config, command []string) (*Reflex, error) {
 		if c.startService {
 			return nil, errors.New("Using --start-service does not work with a command that has a substitution symbol.")
 		}
-		backlog = &UniqueFilesBacklog{true, "", make(map[string]struct{})}
+		backlog = NewUniqueFilesBacklog()
 	} else {
-		backlog = new(UnifiedBacklog)
+		backlog = NewUnifiedBacklog()
 	}
 
 	if c.onlyFiles && c.onlyDirs {

@@ -14,29 +14,38 @@ type Backlog interface {
 }
 
 // A UnifiedBacklog only remembers one backlog item at a time.
-type UnifiedBacklog string
+type UnifiedBacklog struct {
+	s     string
+	empty bool
+}
+
+func NewUnifiedBacklog() *UnifiedBacklog {
+	return &UnifiedBacklog{empty: true}
+}
 
 // Add adds path to b if there is not a path there currently. Otherwise it discards it.
 func (b *UnifiedBacklog) Add(path string) {
-	if b == nil {
-		*b = UnifiedBacklog(path)
+	if b.empty {
+		b.s = path
+		b.empty = false
 	}
 }
 
 // Next returns the path in b.
 func (b *UnifiedBacklog) Next() string {
-	if b == nil {
+	if b.empty {
 		panic("Next() called on empty backlog")
 	}
-	return string(*b)
+	return b.s
 }
 
 // RemoveOne removes the path in b.
 func (b *UnifiedBacklog) RemoveOne() bool {
-	if b == nil {
+	if b.empty {
 		panic("RemoveOne() called on empty backlog")
 	}
-	b = nil
+	b.empty = true
+	b.s = ""
 	return true
 }
 
@@ -45,6 +54,10 @@ type UniqueFilesBacklog struct {
 	empty bool
 	next  string
 	rest  map[string]struct{}
+}
+
+func NewUniqueFilesBacklog() *UniqueFilesBacklog {
+	return &UniqueFilesBacklog{empty: true, next: "", rest: make(map[string]struct{})}
 }
 
 // Add adds path to the set of files in b.
