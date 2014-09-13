@@ -90,9 +90,11 @@ If you specify multiple globs/regexes (e.g. `-r foo -r bar -R baz -G x/*/y`), on
 patterns and none of the inverse patterns are selected.
 
 The shell glob syntax is described [here](http://golang.org/pkg/path/filepath/#Match), while the regular
-expression syntax is described [here](https://code.google.com/p/re2/wiki/Syntax). The path that is matched
-against the glob or regular expression does not have a leading `./`. For example, if there is a file
-`./foobar.txt` that changes, then it will be matched by the regular expression `^foobar`.
+expression syntax is described [here](https://code.google.com/p/re2/wiki/Syntax).
+
+The path that is matched against the glob or regular expression does not have a leading `./`. For example, if
+there is a file `./foobar.txt` that changes, then it will be matched by the regular expression `^foobar`. If
+the path is a directory, it has a trailing `/`.
 
 ### --start-service
 
@@ -180,7 +182,7 @@ depending on which command it is, making it easier to distinguish the output.
 
 If you don't use `-r` or `-g`, reflex will match every file.
 
-For ignoring directories, it's easiest to use a regular expression: `-R dir/`.
+For ignoring directories, it's easiest to use a regular expression: `-R '^dir/'`.
 
 Many regex characters are interpreted specially by various shells. You'll generally want to minimize this
 effect by putting the regex in single quotes.

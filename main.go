@@ -185,7 +185,7 @@ func main() {
 	for i := range reflexes {
 		broadcastChanges[i] = make(chan string)
 	}
-	go watch(".", watcher, changes, done)
+	go watch(".", watcher, changes, done, reflexes)
 	go broadcast(broadcastChanges, changes)
 	go printOutput(stdout, os.Stdout)
 
