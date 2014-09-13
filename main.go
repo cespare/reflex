@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	flag "github.com/cespare/pflag"
+	flag "github.com/ogier/pflag"
 	"gopkg.in/fsnotify.v1"
 )
 

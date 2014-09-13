@@ -21,16 +21,12 @@ type Reflex struct {
 	source       string // Describes what config/line defines this Reflex
 	startService bool
 	backlog      Backlog
-	matcher      MatchingFxn
-	matcherInfo  string
+	matcher      Matcher
 	onlyFiles    bool
 	onlyDirs     bool
 	command      []string
 	subSymbol    string
-
-	done     chan struct{}
-	filtered chan string
-	batched  chan string
+	done         chan struct{}
 
 	// Used for services (startService = true)
 	cmd    *exec.Cmd
@@ -41,7 +37,7 @@ type Reflex struct {
 
 // NewReflex prepares a Reflex from a Config, with sanity checking.
 func NewReflex(c *Config) (*Reflex, error) {
-	matcher, matcherInfo, err := ParseMatchers(c.regex, c.glob, c.invertRegex, c.invertGlob)
+	matcher, err := ParseMatchers(c.regexes, c.inverseRegexes, c.globs, c.inverseGlobs)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing glob/regex: %s", err)
 	}
@@ -81,14 +77,10 @@ func NewReflex(c *Config) (*Reflex, error) {
 		startService: c.startService,
 		backlog:      backlog,
 		matcher:      matcher,
-		matcherInfo:  matcherInfo,
 		onlyFiles:    c.onlyFiles,
 		onlyDirs:     c.onlyDirs,
 		command:      c.command,
 		subSymbol:    c.subSymbol,
-
-		filtered: make(chan string),
-		batched:  make(chan string),
 
 		mu: &sync.Mutex{},
 	}
@@ -101,7 +93,9 @@ func (r *Reflex) String() string {
 	var buf bytes.Buffer
 	fmt.Fprintln(&buf, "Reflex from", r.source)
 	fmt.Fprintln(&buf, "| ID:", r.id)
-	fmt.Fprintln(&buf, r.matcherInfo)
+	for _, matcherInfo := range strings.Split(r.matcher.String(), "\n") {
+		fmt.Fprintln(&buf, "|", matcherInfo)
+	}
 	if r.onlyFiles {
 		fmt.Fprintln(&buf, "| Only matching files.")
 	} else if r.onlyDirs {
@@ -123,7 +117,7 @@ func (r *Reflex) String() string {
 // filterMatching passes on messages matching the regex/glob.
 func (r *Reflex) filterMatching(out chan<- string, in <-chan string) {
 	for name := range in {
-		if !r.matcher(name) {
+		if !r.matcher.Match(name) {
 			continue
 		}
 

@@ -8,33 +8,35 @@ import (
 	"os"
 	"strings"
 
-	flag "github.com/cespare/pflag"
 	"github.com/kballard/go-shellquote"
+	flag "github.com/ogier/pflag"
 )
 
 type Config struct {
 	command []string
 	source  string
 
-	regex        string
-	glob         string
-	invertRegex  string
-	invertGlob   string
-	subSymbol    string
-	startService bool
-	onlyFiles    bool
-	onlyDirs     bool
+	regexes        []string
+	globs          []string
+	inverseRegexes []string
+	inverseGlobs   []string
+	subSymbol      string
+	startService   bool
+	onlyFiles      bool
+	onlyDirs       bool
 }
 
 func (c *Config) registerFlags(f *flag.FlagSet) {
-	f.StringVarP(&c.regex, "regex", "r", "", `
-            A regular expression to match filenames.`)
-	f.StringVarP(&c.invertRegex, "invertRegex", "R", "", `
-	          A regular expression to exclude matching filenames.`)
-	f.StringVarP(&c.glob, "glob", "g", "", `
-            A shell glob expression to match filenames.`)
-	f.StringVarP(&c.invertGlob, "invertGlob", "G", "", `
-	          A shell glob expression to exclude matching filenames.`)
+	f.VarP(newMultiString(nil, &c.regexes), "regex", "r", `
+            A regular expression to match filenames. (May be repeated.)`)
+	f.VarP(newMultiString(nil, &c.inverseRegexes), "inverse-regex", "R", `
+            A regular expression to exclude matching filenames.
+            (May be repeated.)`)
+	f.VarP(newMultiString(nil, &c.globs), "glob", "g", `
+            A shell glob expression to match filenames. (May be repeated.)`)
+	f.VarP(newMultiString(nil, &c.inverseGlobs), "inverse-glob", "G", `
+            A shell glob expression to exclude matching filenames.
+            (May be repeated.)`)
 	f.StringVar(&c.subSymbol, "substitute", defaultSubSymbol, `
             The substitution symbol that is replaced with the filename
             in a command.`)
@@ -95,4 +97,33 @@ func readConfigsFromReader(r io.Reader, name string) ([]*Config, error) {
 		return nil, fmt.Errorf("error reading config from %s: %s", name, err)
 	}
 	return configs, nil
+}
+
+// A multiString is a flag.Getter which collects repeated string flags.
+type multiString struct {
+	vals *[]string
+	set  bool // If false, then vals contains the defaults.
+}
+
+func newMultiString(vals []string, p *[]string) *multiString {
+	*p = vals
+	return &multiString{vals: p}
+}
+
+func (s *multiString) Set(val string) error {
+	if s.set {
+		*s.vals = append(*s.vals, val)
+	} else {
+		*s.vals = []string{val}
+		s.set = true
+	}
+	return nil
+}
+
+func (s *multiString) Get() interface{} {
+	return s.vals
+}
+
+func (s *multiString) String() string {
+	return fmt.Sprintf("[%s]", strings.Join(*s.vals, " "))
 }
