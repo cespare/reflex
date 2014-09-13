@@ -23,47 +23,56 @@ TODO: provide compiled downloads for linux/darwin amd64.
 
 The following is given by running `reflex -h`:
 
-    Usage: ./reflex [OPTIONS] [COMMAND]
+```
+Usage: ./reflex [OPTIONS] [COMMAND]
 
-    COMMAND is any command you'd like to run. Any instance of {} will be replaced
-    with the filename of the changed file. (The symbol may be changed with the
-    --substitute flag.)
+COMMAND is any command you'd like to run. Any instance of {} will be replaced
+with the filename of the changed file. (The symbol may be changed with the
+--substitute flag.)
 
-    OPTIONS are given below:
-      -c, --config="":
-                A configuration file that describes how to run reflex
-                (or '-' to read the configuration from stdin).
-      -d, --decoration="plain":
-                How to decorate command output. Choices: none, plain, fancy.
-      -g, --glob="":
-                A shell glob expression to match filenames.
-          --only-dirs=false:
-                Only match directories (not files).
-          --only-files=false:
-                Only match files (not directories).
-      -r, --regex="":
-                A regular expression to match filenames.
-      -e, --sequential=false:
-                Don't run multiple commands at the same time.
-      -s, --start-service=false:
-                Indicates that the command is a long-running process to be
-                restarted on matching changes.
-          --substitute="{}":
-                The substitution symbol that is replaced with the filename
-                in a command.
-      -v, --verbose=false:
-                Verbose mode: print out more information about what reflex is doing.
+OPTIONS are given below:
+  -c, --config="":
+            A configuration file that describes how to run reflex
+            (or '-' to read the configuration from stdin).
+  -d, --decoration="plain":
+            How to decorate command output. Choices: none, plain, fancy.
+  -g, --glob=[]:
+            A shell glob expression to match filenames. (May be repeated.)
+  -G, --inverse-glob=[]:
+            A shell glob expression to exclude matching filenames.
+            (May be repeated.)
+  -R, --inverse-regex=[]:
+            A regular expression to exclude matching filenames.
+            (May be repeated.)
+      --only-dirs=false:
+            Only match directories (not files).
+      --only-files=false:
+            Only match files (not directories).
+  -r, --regex=[]:
+            A regular expression to match filenames. (May be repeated.)
+  -e, --sequential=false:
+            Don't run multiple commands at the same time.
+  -s, --start-service=false:
+            Indicates that the command is a long-running process to be
+            restarted on matching changes.
+      --substitute="{}":
+            The substitution symbol that is replaced with the filename
+            in a command.
+  -v, --verbose=false:
+            Verbose mode: print out more information about what reflex is doing.
 
-    Examples:
+Examples:
 
-        # Print each .txt file if it changes
-        $ reflex -r '\.txt$' echo {}
+    # Print each .txt file if it changes
+    $ reflex -r '\.txt$' echo {}
 
-        # Run 'make' if any of the .c files in this directory change:
-        $ reflex -g '*.c' make
+    # Run 'make' if any of the .c files in this directory change:
+    $ reflex -g '*.c' make
 
-        # Build and run a server; rebuild and restart when .java files change:
-        $ reflex -r '\.java$' -s -- sh -c 'make && java bin/Server'
+    # Build and run a server; rebuild and restart when .java files change:
+    $ reflex -r '\.java$' -s -- sh -c 'make && java bin/Server'
+
+```
 
 ### Overview
 
@@ -73,8 +82,12 @@ flags change what changes cause the command to be rerun and other behavior.
 ### Patterns
 
 You can specify files to match using either shell glob patterns (`-g`) or regular expressions (`-r`). If you
-don't specify either, reflex will run your command after any file changes. You cannot specify glob patterns
-and regular expressions.
+don't specify either, reflex will run your command after any file changes.
+
+You can specify inverse matches by using the `--inverse-glob` (`-G`) and `--inverse-regex` (`-R`) flags.
+
+If you specify multiple globs/regexes (e.g. `-r foo -r bar -R baz -G x/*/y`), only files that match all
+patterns and none of the inverse patterns are selected.
 
 The shell glob syntax is described [here](http://golang.org/pkg/path/filepath/#Match), while the regular
 expression syntax is described [here](https://code.google.com/p/re2/wiki/Syntax). The path that is matched
@@ -167,6 +180,8 @@ depending on which command it is, making it easier to distinguish the output.
 
 If you don't use `-r` or `-g`, reflex will match every file.
 
+For ignoring directories, it's easiest to use a regular expression: `-R dir/`.
+
 Many regex characters are interpreted specially by various shells. You'll generally want to minimize this
 effect by putting the regex in single quotes.
 
@@ -182,8 +197,8 @@ in through reflex.
 
 It's not difficult to accidentally make an infinite loop with certain commands. For example, consider this
 command: `reflex -r '\.txt' cp {} {}.bak`. If `foo.txt` changes, then this will create `foo.txt.bak`,
-`foo.txt.bak.bak`, and so forth, because the regex `\.txt` matches each file. Right now reflex doesn't have
-any kind of infinite loop detection, so be careful with commands like `cp`.
+`foo.txt.bak.bak`, and so forth, because the regex `\.txt` matches each file. Reflex doesn't have any kind of
+infinite loop detection, so be careful with commands like `cp`.
 
 The restart behavior works as follows: if your program is still running, reflex sends it SIGINT; after 1
 second if it's still alive, it gets SIGKILL. The new process won't be started up until the old process is
