@@ -41,6 +41,9 @@ func NewReflex(c *Config) (*Reflex, error) {
 	if err != nil {
 		return nil, fmt.Errorf("error parsing glob/regex: %s", err)
 	}
+	if !c.allFiles {
+		matcher = multiMatcher{defaultExcludeMatcher, matcher}
+	}
 	if len(c.command) == 0 {
 		return nil, errors.New("must give command to execute")
 	}

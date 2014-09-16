@@ -57,3 +57,37 @@ func TestMultiMatcher(t *testing.T) {
 	equals(t, true, m.Match("foo/bar.go"))
 	equals(t, false, m.Match("foobar/blah.go"))
 }
+
+func TestDefaultExcludes(t *testing.T) {
+	for _, testCase := range []struct {
+		filename string
+		expected bool
+	}{
+		{".git/HEAD", false},
+		{"foo.git", true},
+		{"foo/bar.git", true},
+		{"foo/bar/.git/HEAD", false},
+		{"foo~", false},
+		{"foo/bar~", false},
+		{"~foo", true},
+		{"foo~bar", true},
+		{"foo.swp", false},
+		{"foo.swp.bar", true},
+		{"foo/bar.swp", false},
+		{"foo.#123", false},
+		{"foo#123", true},
+		{"foo/bar.#123", false},
+		{"#foo#", false},
+		{"foo/#bar#", false},
+		{".DS_Store", false},
+		{"foo/.DS_Store", false},
+	} {
+		exp := testCase.expected
+		got := defaultExcludeMatcher.Match(testCase.filename)
+		s := "was excluded"
+		if !exp {
+			s = "was not excluded"
+		}
+		assert(t, exp == got, "%q %s the default excludes matcher", testCase.filename, s)
+	}
+}

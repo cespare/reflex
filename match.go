@@ -19,6 +19,41 @@ type Matcher interface {
 	String() string
 }
 
+// ParseMatchers combines multiple (possibly inverse) regex and glob patterns into a single Matcher.
+func ParseMatchers(regexes, inverseRegexes, globs, inverseGlobs []string) (m Matcher, err error) {
+	var matchers multiMatcher
+	if len(regexes) == 0 && len(globs) == 0 {
+		matchers = multiMatcher{matchAll{}}
+	}
+	for _, r := range regexes {
+		regex, err := regexp.Compile(r)
+		if err != nil {
+			return nil, err
+		}
+		matchers = append(matchers, &regexMatcher{regex: regex})
+	}
+	for _, r := range inverseRegexes {
+		regex, err := regexp.Compile(r)
+		if err != nil {
+			return nil, err
+		}
+		matchers = append(matchers, &regexMatcher{
+			regex:   regex,
+			inverse: true,
+		})
+	}
+	for _, g := range globs {
+		matchers = append(matchers, &globMatcher{glob: g})
+	}
+	for _, g := range inverseGlobs {
+		matchers = append(matchers, &globMatcher{
+			glob:    g,
+			inverse: true,
+		})
+	}
+	return matchers, nil
+}
+
 // matchAll is an all-accepting Matcher.
 type matchAll struct{}
 
@@ -147,38 +182,4 @@ func (m multiMatcher) String() string {
 		s = append(s, matcher.String())
 	}
 	return strings.Join(s, "\n")
-}
-
-func ParseMatchers(regexes, inverseRegexes, globs, inverseGlobs []string) (m Matcher, err error) {
-	var matchers multiMatcher
-	if len(regexes) == 0 && len(globs) == 0 {
-		matchers = multiMatcher{matchAll{}}
-	}
-	for _, r := range regexes {
-		regex, err := regexp.Compile(r)
-		if err != nil {
-			return nil, err
-		}
-		matchers = append(matchers, &regexMatcher{regex: regex})
-	}
-	for _, r := range inverseRegexes {
-		regex, err := regexp.Compile(r)
-		if err != nil {
-			return nil, err
-		}
-		matchers = append(matchers, &regexMatcher{
-			regex:   regex,
-			inverse: true,
-		})
-	}
-	for _, g := range globs {
-		matchers = append(matchers, &globMatcher{glob: g})
-	}
-	for _, g := range inverseGlobs {
-		matchers = append(matchers, &globMatcher{
-			glob:    g,
-			inverse: true,
-		})
-	}
-	return matchers, nil
 }

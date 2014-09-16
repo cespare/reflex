@@ -3,7 +3,7 @@
 Reflex is a small tool to watch a directory and rerun a command when certain files change. It's great for
 automatically running compile/lint/test tasks and for reloading your application when the code changes.
 
-## TL;DR
+## A simple example
 
     # Rerun make whenever a .c file changes
     reflex -r '\.c$' make
@@ -24,13 +24,15 @@ TODO: provide compiled downloads for linux/darwin amd64.
 The following is given by running `reflex -h`:
 
 ```
-Usage: ./reflex [OPTIONS] [COMMAND]
+Usage: reflex [OPTIONS] [COMMAND]
 
 COMMAND is any command you'd like to run. Any instance of {} will be replaced
 with the filename of the changed file. (The symbol may be changed with the
 --substitute flag.)
 
 OPTIONS are given below:
+      --all=false:
+            Include normally ignored files (VCS and editor special files).
   -c, --config="":
             A configuration file that describes how to run reflex
             (or '-' to read the configuration from stdin).
@@ -82,7 +84,8 @@ flags change what changes cause the command to be rerun and other behavior.
 ### Patterns
 
 You can specify files to match using either shell glob patterns (`-g`) or regular expressions (`-r`). If you
-don't specify either, reflex will run your command after any file changes.
+don't specify either, reflex will run your command after any file changes. (Reflex ignores some common editor
+and version control files; see Ignored files, below.)
 
 You can specify inverse matches by using the `--inverse-glob` (`-G`) and `--inverse-regex` (`-R`) flags.
 
@@ -177,6 +180,14 @@ By default, each line of output from your command is prefixed with something lik
 id that reflex assigns to each command. You can use `--decoration` (`-d`) to change this output:
 `--decoration=none` will print the output as is; `--decoration=fancy` will color each line differently
 depending on which command it is, making it easier to distinguish the output.
+
+### Ignored files
+
+Reflex ignores a variety of version control and editor metadata files by default. If you wish for these to be
+included, you can provide reflex with the `--all` flag.
+
+You can see a list of regular expressions that match the files that reflex ignores by default
+[here](https://github.com/cespare/reflex/blob/master/defaultexclude.go#L5).
 
 ## Notes and Tips
 
