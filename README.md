@@ -193,6 +193,9 @@ You can see a list of regular expressions that match the files that reflex ignor
 
 If you don't use `-r` or `-g`, reflex will match every file.
 
+Reflex only considers file creation and modification changes. It does not report attribute changes nor
+deletions.
+
 For ignoring directories, it's easiest to use a regular expression: `-R '^dir/'`.
 
 Many regex characters are interpreted specially by various shells. You'll generally want to minimize this
