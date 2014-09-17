@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"regexp/syntax"
 	"strings"
+	"sync"
 )
 
 // A Matcher decides whether some filename matches its set of patterns.
@@ -30,17 +31,14 @@ func ParseMatchers(regexes, inverseRegexes, globs, inverseGlobs []string) (m Mat
 		if err != nil {
 			return nil, err
 		}
-		matchers = append(matchers, &regexMatcher{regex: regex})
+		matchers = append(matchers, newRegexMatcher(regex, false))
 	}
 	for _, r := range inverseRegexes {
 		regex, err := regexp.Compile(r)
 		if err != nil {
 			return nil, err
 		}
-		matchers = append(matchers, &regexMatcher{
-			regex:   regex,
-			inverse: true,
-		})
+		matchers = append(matchers, newRegexMatcher(regex, true))
 	}
 	for _, g := range globs {
 		matchers = append(matchers, &globMatcher{glob: g})
@@ -88,12 +86,21 @@ type regexMatcher struct {
 	regex   *regexp.Regexp
 	inverse bool
 
-	canExcludePrefix bool // This regex has no $, \z, or \b -- see ExcludePrefix
+	mu               *sync.Mutex // protects following
+	canExcludePrefix bool        // This regex has no $, \z, or \b -- see ExcludePrefix
 	excludeChecked   bool
 }
 
 func (m *regexMatcher) Match(name string) bool {
 	return m.regex.MatchString(name) != m.inverse
+}
+
+func newRegexMatcher(regex *regexp.Regexp, inverse bool) *regexMatcher {
+	return &regexMatcher{
+		regex:   regex,
+		inverse: inverse,
+		mu:      new(sync.Mutex),
+	}
 }
 
 // ExcludePrefix returns whether this matcher cannot possibly match any path with a particular prefix.
@@ -120,6 +127,8 @@ func (m *regexMatcher) ExcludePrefix(prefix string) bool {
 		return false
 	}
 
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	if !m.excludeChecked {
 		r, err := syntax.Parse(m.regex.String(), syntax.Perl)
 		if err != nil {

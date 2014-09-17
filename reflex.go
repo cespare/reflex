@@ -28,11 +28,13 @@ type Reflex struct {
 	subSymbol    string
 	done         chan struct{}
 
+	mu      *sync.Mutex // protects killed and running
+	killed  bool
+	running bool
+
 	// Used for services (startService = true)
-	cmd    *exec.Cmd
-	tty    *os.File
-	mu     *sync.Mutex // protects killed
-	killed bool
+	cmd *exec.Cmd
+	tty *os.File
 }
 
 // NewReflex prepares a Reflex from a Config, with sanity checking.
@@ -84,6 +86,7 @@ func NewReflex(c *Config) (*Reflex, error) {
 		onlyDirs:     c.onlyDirs,
 		command:      c.command,
 		subSymbol:    c.subSymbol,
+		done:         make(chan struct{}),
 
 		mu: &sync.Mutex{},
 	}
@@ -173,7 +176,7 @@ func (r *Reflex) batch(out chan<- string, in <-chan string) {
 func (r *Reflex) runEach(names <-chan string) {
 	for name := range names {
 		if r.startService {
-			if r.done != nil {
+			if r.Running() {
 				infoPrintln(r.id, "Killing service")
 				r.terminate()
 			}
@@ -182,7 +185,9 @@ func (r *Reflex) runEach(names <-chan string) {
 		} else {
 			r.runCommand(name, stdout)
 			<-r.done
-			r.done = nil
+			r.mu.Lock()
+			r.running = false
+			r.mu.Unlock()
 		}
 	}
 }
@@ -212,7 +217,7 @@ func (r *Reflex) terminate() {
 			// the process may have created.
 			if err := syscall.Kill(-1*r.cmd.Process.Pid, sig); err != nil {
 				infoPrintln(r.id, "Error killing:", err)
-				if err.(syscall.Errno) == syscall.ESRCH { // "no such process"
+				if err.(syscall.Errno) == syscall.ESRCH { // no such process
 					return
 				}
 			}
@@ -261,17 +266,15 @@ func (r *Reflex) runCommand(name string, stdout chan<- OutMsg) {
 		// errors here unless I can find a better way to handle it.
 	}()
 
-	done := make(chan struct{})
-	r.done = done
+	r.mu.Lock()
+	r.running = true
+	r.mu.Unlock()
 	go func() {
 		err := cmd.Wait()
-		r.mu.Lock()
-		killed := r.killed
-		r.mu.Unlock()
-		if !killed && err != nil {
+		if !r.Killed() && err != nil {
 			stdout <- OutMsg{r.id, fmt.Sprintf("(error exit: %s)", err)}
 		}
-		done <- struct{}{}
+		r.done <- struct{}{}
 		if flagSequential {
 			seqCommands.Unlock()
 		}
@@ -289,4 +292,16 @@ func (r *Reflex) Start(changes <-chan string) {
 		infoPrintln(r.id, "Starting service")
 		r.runCommand("", stdout)
 	}
+}
+
+func (r *Reflex) Killed() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.killed
+}
+
+func (r *Reflex) Running() bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.running
 }

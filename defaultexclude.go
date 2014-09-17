@@ -20,7 +20,7 @@ var defaultExcludeMatcher multiMatcher
 
 func init() {
 	for _, pattern := range defaultExcludes {
-		m := &regexMatcher{regex: regexp.MustCompile(pattern), inverse: true}
+		m := newRegexMatcher(regexp.MustCompile(pattern), true)
 		defaultExcludeMatcher = append(defaultExcludeMatcher, m)
 	}
 }

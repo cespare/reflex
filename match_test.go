@@ -17,18 +17,18 @@ func TestGlobMatcher(t *testing.T) {
 }
 
 func TestRegexMatcher(t *testing.T) {
-	m := &regexMatcher{regex: regexp.MustCompile("foo.*")}
+	m := newRegexMatcher(regexp.MustCompile("foo.*"), false)
 	equals(t, true, m.Match("foo"))
 	equals(t, true, m.Match("foobar"))
 	equals(t, false, m.Match("bar"))
-	m = &regexMatcher{regex: regexp.MustCompile("foo.*"), inverse: true}
+	m = newRegexMatcher(regexp.MustCompile("foo.*"), true)
 	equals(t, false, m.Match("foo"))
 	equals(t, false, m.Match("foobar"))
 	equals(t, true, m.Match("bar"))
 }
 
 func TestExcludePrefix(t *testing.T) {
-	m := &regexMatcher{regex: regexp.MustCompile("foo")}
+	m := newRegexMatcher(regexp.MustCompile("foo"), false)
 	equals(t, false, m.ExcludePrefix("bar")) // Never true for non-inverted
 
 	for _, testCase := range []struct {
@@ -42,16 +42,16 @@ func TestExcludePrefix(t *testing.T) {
 		{re: `foo\b`, prefix: "foo", expected: false},
 		{re: `(foo\b)|(baz$)`, prefix: "foo", expected: false},
 	} {
-		m := &regexMatcher{regex: regexp.MustCompile(testCase.re), inverse: true}
+		m := newRegexMatcher(regexp.MustCompile(testCase.re), true)
 		equals(t, testCase.expected, m.ExcludePrefix(testCase.prefix))
 	}
 }
 
 func TestMultiMatcher(t *testing.T) {
 	m := multiMatcher{
-		&regexMatcher{regex: regexp.MustCompile("foo")},
-		&regexMatcher{regex: regexp.MustCompile(`\.go$`)},
-		&regexMatcher{regex: regexp.MustCompile("foobar"), inverse: true},
+		newRegexMatcher(regexp.MustCompile("foo"), false),
+		newRegexMatcher(regexp.MustCompile(`\.go$`), false),
+		newRegexMatcher(regexp.MustCompile("foobar"), true),
 	}
 	equals(t, true, m.Match("foo.go"))
 	equals(t, true, m.Match("foo/bar.go"))

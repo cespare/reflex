@@ -97,7 +97,7 @@ func cleanup(reason string) {
 	fmt.Println(reason)
 	wg := &sync.WaitGroup{}
 	for _, reflex := range reflexes {
-		if reflex.done != nil {
+		if reflex.Running() {
 			wg.Add(1)
 			go func(reflex *Reflex) {
 				reflex.terminate()
