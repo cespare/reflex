@@ -243,12 +243,6 @@ attempts to match `sh`'s argument splitting rules.
 This difference can lead to slightly different behavior when running commands from a config file. If you're
 confused, it can help to use `--verbose` (`-v`) which will print out each command as interpreted by reflex.
 
-## TODO
-
-* Implement recursive globbing (globstar). (Actually fairly tricky.)
-* Implement/copy the parts of go-shellquote that I need myself.
-* Consider vendoring all the deps.
-
 ## The competition
 
 * https://github.com/guard/guard
