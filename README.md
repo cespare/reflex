@@ -243,6 +243,26 @@ attempts to match `sh`'s argument splitting rules.
 This difference can lead to slightly different behavior when running commands from a config file. If you're
 confused, it can help to use `--verbose` (`-v`) which will print out each command as interpreted by reflex.
 
+### Open file limits
+
+Reflex currently must hold an open file descriptor for every directory it's watching, recursively. If you run
+reflex at the top of a big directory tree, you can easily run into file descriptor limits. You might see an
+error like this:
+
+    open some/path: too many open files
+
+There are several things you can do to get around this problem.
+
+1. Run reflex in the most specific directory possible. Don't run `reflex -g path/to/project/*.c ...` from
+   `$HOME`; instead run reflex in `path/to/project`.
+2. Ignore large subdirectories. Reflex already ignores, for instance, `.git/`. If you have other large
+   subdirectories, you can ignore those yourself: `reflex -R '^third_party/' ...` ignores everything under
+   `third_party/` in your project directory.
+3. Raise the fd limit using `ulimit` or some other tool. On some systems, this might default to a
+   restrictively small value like 256.
+
+See [issue #6](https://github.com/cespare/reflex/issues/6) for some more background on this issue.
+
 ## The competition
 
 * https://github.com/guard/guard
