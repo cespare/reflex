@@ -120,30 +120,28 @@ when they change. You can do this with:
 In case you need to use `{}` for something else in your command, you can change the substitution symbol with
 the `--substitute` flag.
 
-### Config file
+### Configuration file
 
 What if you want to run many watches at once? For example, when writing web applications I often want to
 rebuild/rerun the server when my code changes, but also build SCSS and Coffeescript when those change as well.
-Instead of running multiple reflex instances, which is inefficient, you can simply give reflex a config file.
+Instead of running multiple reflex instances, which is cumbersome (and inefficient), you can give reflex a
+configuration file.
 
-The config file syntax is extremely simple: each line is a command, and each command is just like calling
-reflex (except without the initial `reflex` command). Lines that start with `#` are ignored. Here's a simple
-example:
+The configuration file syntax is simple: each line is a command, and each command is composed of flags and
+arguments -- just like calling reflex but without the initial `reflex`. Lines that start with `#` are ignored.
+Here's an example:
 
     # Rebuild SCSS when it changes
     -r '\.scss$' -- sh -c 'sass {} `basename {} .scss`.css'
     # Restart server when ruby code changes
     -sr '\.rb$' -- ./bin/run_server.sh
 
-#### Restarting when the config file changes
+If you want to change the configuration file and have reflex reload it on the fly, you can run reflex inside
+reflex:
 
-If you want reflex to restart itself whenever the configuration file changes, you can make use of this inceptive idiom:
+    reflex -s -g reflex.conf -- reflex -c reflex.conf
 
-```
-reflex -s -g reflex.config -- reflex -c reflex.config
-```
-
-This tells reflex to run another reflex process as a service that's restarted whenever the `reflex.config` file changes.
+This tells reflex to run another reflex process as a service that's restarted whenever `reflex.conf` changes.
 
 ### --sequential
 
@@ -170,7 +168,7 @@ When this runs, you'll see something like this:
     [00] first
 
 Note that the output is interleaved. (Reflex does ensure that each line of output is not interleaved with a
-different line). If, for some reason, you need to ensure that your commands don't run at the same time, you
+different line.) If, for some reason, you need to ensure that your commands don't run at the same time, you
 can do this with the `--sequential` (`-e`) flag. Then the output would look like (for example):
 
     [01] second
