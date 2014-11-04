@@ -135,6 +135,16 @@ example:
     # Restart server when ruby code changes
     -sr '\.rb$' -- ./bin/run_server.sh
 
+#### Restarting when the config file changes
+
+If you want reflex to restart itself whenever the configuration file changes, you can make use of this inceptive idiom:
+
+```
+reflex -s -g reflex.config -- reflex -c reflex.config
+```
+
+This tells reflex to run another reflex process as a service that's restarted whenever the `reflex.config` file changes.
+
 ### --sequential
 
 When using a config file to run multiple simultaneous commands, reflex will run them at the same time (if
