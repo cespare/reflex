@@ -294,3 +294,4 @@ See [issue #6](https://github.com/cespare/reflex/issues/6) for some more backgro
 * Rich Liebling ([rliebling](https://github.com/rliebling))
 * Seth W. Klein ([sethwklein](https://github.com/sethwklein))
 * Vincent Vanackere ([vanackere](https://github.com/vanackere))
+* Benedikt Böhm ([hollow](https://github.com/hollow))
