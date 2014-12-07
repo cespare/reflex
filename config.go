@@ -13,18 +13,18 @@ import (
 )
 
 type Config struct {
-	command []string
-	source  string
-
-	regexes        []string
-	globs          []string
-	inverseRegexes []string
-	inverseGlobs   []string
-	subSymbol      string
-	startService   bool
-	onlyFiles      bool
-	onlyDirs       bool
-	allFiles bool
+	command         []string
+	source          string
+	regexes         []string
+	globs           []string
+	inverseRegexes  []string
+	inverseGlobs    []string
+	subSymbol       string
+	startService    bool
+	shutdownTimeout int
+	onlyFiles       bool
+	onlyDirs        bool
+	allFiles        bool
 }
 
 func (c *Config) registerFlags(f *flag.FlagSet) {
@@ -44,6 +44,8 @@ func (c *Config) registerFlags(f *flag.FlagSet) {
 	f.BoolVarP(&c.startService, "start-service", "s", false, `
             Indicates that the command is a long-running process to be
             restarted on matching changes.`)
+	f.IntVarP(&c.shutdownTimeout, "shutdown-timeout", "t", 60, `
+            Number of seconds to wait for shutdown.`)
 	f.BoolVar(&c.onlyFiles, "only-files", false, `
             Only match files (not directories).`)
 	f.BoolVar(&c.onlyDirs, "only-dirs", false, `
