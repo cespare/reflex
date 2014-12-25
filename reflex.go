@@ -77,6 +77,10 @@ func NewReflex(c *Config) (*Reflex, error) {
 		return nil, errors.New("cannot specify both --only-files and --only-dirs")
 	}
 
+	if c.shutdownTimeout <= 0 {
+		return nil, errors.New("shutdown timeout cannot be <= 0")
+	}
+
 	reflex := &Reflex{
 		id:           reflexID,
 		source:       c.source,
@@ -88,7 +92,7 @@ func NewReflex(c *Config) (*Reflex, error) {
 		command:      c.command,
 		subSymbol:    c.subSymbol,
 		done:         make(chan struct{}),
-		timeout:      time.Duration(c.shutdownTimeout) * time.Second,
+		timeout:      c.shutdownTimeout,
 		mu:           &sync.Mutex{},
 	}
 	reflexID++
