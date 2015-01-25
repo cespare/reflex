@@ -2,8 +2,9 @@ sudo: false
 language: go
 go: 1.4
 before_deploy:
-  - GOOS=darwin GOARCH=amd64 go build -v -o reflex_darwin_amd64 ./...
-  - GOOS=linux GOARCH=amd64 go build -v -o reflex_linux_amd64 ./...
+  - go get github.com/mitchellh/gox
+  - gox -build-toolchain
+  - gox --osarch "linux/amd64 darwin/amd64" --output "reflex_{{.OS}}_{{.Arch}}"
 deploy:
   provider: releases
   api_key:
