@@ -13,7 +13,7 @@ deploy:
   - reflex_darwin_amd64
   - reflex_linux_amd64
   on:
-    repo: nnutter/reflex
+    repo: cespare/reflex
     all_branches: true
     tags: true
     go: go1.4

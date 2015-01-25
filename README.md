@@ -17,7 +17,7 @@ get` will automatically fetch them for you.
 
 Reflex probably only works on Linux and Mac OS.
 
-TODO: provide compiled downloads for linux/darwin amd64.
+Binaries can be downloaded on the [cespare/reflex releases](https://github.com/cespare/reflex/releases) page.
 
 ## Usage
 
