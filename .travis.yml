@@ -3,7 +3,7 @@ language: go
 go: 1.4
 before_deploy:
   - go get github.com/mitchellh/gox
-  - gox -build-toolchain
+  - gox -osarch "linux/amd64 darwin/amd64" -build-toolchain
   - gox -osarch "linux/amd64 darwin/amd64" -output "reflex_{{.OS}}_{{.Arch}}"
 deploy:
   provider: releases
