@@ -206,8 +206,8 @@ deletions.
 
 For ignoring directories, it's easiest to use a regular expression: `-R '^dir/'`.
 
-Many regex characters are interpreted specially by various shells. You'll generally want to minimize this
-effect by putting the regex in single quotes.
+Many regex and glob characters are interpreted specially by various shells. You'll generally want to minimize
+this effect by putting the regex and glob patterns in single quotes.
 
 If your command has options, you'll probably need to use `--` to separate the reflex flags from your command
 flags. For example: `reflex -r '.*\.txt' -- ls -l`.
