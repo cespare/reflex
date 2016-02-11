@@ -7,24 +7,25 @@ import (
 	"io/ioutil"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/kballard/go-shellquote"
 	flag "github.com/ogier/pflag"
 )
 
 type Config struct {
-	command []string
-	source  string
-
-	regexes        []string
-	globs          []string
-	inverseRegexes []string
-	inverseGlobs   []string
-	subSymbol      string
-	startService   bool
-	onlyFiles      bool
-	onlyDirs       bool
-	allFiles bool
+	command         []string
+	source          string
+	regexes         []string
+	globs           []string
+	inverseRegexes  []string
+	inverseGlobs    []string
+	subSymbol       string
+	startService    bool
+	shutdownTimeout time.Duration
+	onlyFiles       bool
+	onlyDirs        bool
+	allFiles        bool
 }
 
 func (c *Config) registerFlags(f *flag.FlagSet) {
@@ -44,6 +45,8 @@ func (c *Config) registerFlags(f *flag.FlagSet) {
 	f.BoolVarP(&c.startService, "start-service", "s", false, `
             Indicates that the command is a long-running process to be
             restarted on matching changes.`)
+	f.DurationVarP(&c.shutdownTimeout, "shutdown-timeout", "t", 500*time.Millisecond, `
+            Number of seconds to wait for shutdown.`)
 	f.BoolVar(&c.onlyFiles, "only-files", false, `
             Only match files (not directories).`)
 	f.BoolVar(&c.onlyDirs, "only-dirs", false, `

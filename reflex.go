@@ -31,6 +31,7 @@ type Reflex struct {
 	mu      *sync.Mutex // protects killed and running
 	killed  bool
 	running bool
+	timeout time.Duration
 
 	// Used for services (startService = true)
 	cmd *exec.Cmd
@@ -76,6 +77,10 @@ func NewReflex(c *Config) (*Reflex, error) {
 		return nil, errors.New("cannot specify both --only-files and --only-dirs")
 	}
 
+	if c.shutdownTimeout <= 0 {
+		return nil, errors.New("shutdown timeout cannot be <= 0")
+	}
+
 	reflex := &Reflex{
 		id:           reflexID,
 		source:       c.source,
@@ -87,8 +92,8 @@ func NewReflex(c *Config) (*Reflex, error) {
 		command:      c.command,
 		subSymbol:    c.subSymbol,
 		done:         make(chan struct{}),
-
-		mu: &sync.Mutex{},
+		timeout:      c.shutdownTimeout,
+		mu:           &sync.Mutex{},
 	}
 	reflexID++
 
@@ -200,7 +205,7 @@ func (r *Reflex) terminate() {
 	// (This won't do anything if the process already died as the write will simply fail.)
 	r.tty.Write([]byte{3})
 
-	timer := time.NewTimer(500 * time.Millisecond)
+	timer := time.NewTimer(r.timeout)
 	sig := syscall.SIGINT
 	for {
 		select {
@@ -222,7 +227,7 @@ func (r *Reflex) terminate() {
 				}
 			}
 			// After SIGINT doesn't do anything, try SIGKILL next.
-			timer.Reset(500 * time.Millisecond)
+			timer.Reset(r.timeout)
 			sig = syscall.SIGKILL
 		}
 	}

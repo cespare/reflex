@@ -54,6 +54,8 @@ OPTIONS are given below:
             A regular expression to match filenames. (May be repeated.)
   -e, --sequential=false:
             Don't run multiple commands at the same time.
+  -t, --shutdown-timeout=500ms:
+            Number of seconds to wait for shutdown.
   -s, --start-service=false:
             Indicates that the command is a long-running process to be
             restarted on matching changes.
@@ -290,6 +292,7 @@ See [issue #6](https://github.com/cespare/reflex/issues/6) for some more backgro
 
 ## Authors
 
+* Benedikt Böhm ([hollow](https://github.com/hollow))
 * Caleb Spare ([cespare](https://github.com/cespare))
 * Rich Liebling ([rliebling](https://github.com/rliebling))
 * Seth W. Klein ([sethwklein](https://github.com/sethwklein))
