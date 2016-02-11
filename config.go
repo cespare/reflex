@@ -46,7 +46,7 @@ func (c *Config) registerFlags(f *flag.FlagSet) {
             Indicates that the command is a long-running process to be
             restarted on matching changes.`)
 	f.DurationVarP(&c.shutdownTimeout, "shutdown-timeout", "t", 500*time.Millisecond, `
-            Number of seconds to wait for shutdown.`)
+            Allow services this long to shut down.`)
 	f.BoolVar(&c.onlyFiles, "only-files", false, `
             Only match files (not directories).`)
 	f.BoolVar(&c.onlyDirs, "only-dirs", false, `

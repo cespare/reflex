@@ -55,7 +55,7 @@ OPTIONS are given below:
   -e, --sequential=false:
             Don't run multiple commands at the same time.
   -t, --shutdown-timeout=500ms:
-            Number of seconds to wait for shutdown.
+            Allow services this long to shut down.
   -s, --start-service=false:
             Indicates that the command is a long-running process to be
             restarted on matching changes.
@@ -75,7 +75,6 @@ Examples:
 
     # Build and run a server; rebuild and restart when .java files change:
     $ reflex -r '\.java$' -s -- sh -c 'make && java bin/Server'
-
 ```
 
 ### Overview
