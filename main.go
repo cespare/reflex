@@ -17,6 +17,7 @@ const defaultSubSymbol = "{}"
 
 var (
 	reflexes []*Reflex
+	paths    []string
 
 	flagConf       string
 	flagSequential bool
@@ -160,6 +161,11 @@ func main() {
 			fmt.Println(reflex)
 		}
 		reflexes = append(reflexes, reflex)
+		paths = append(paths, config.paths...)
+	}
+
+	if len(paths) == 0 {
+		paths = append(paths, ".")
 	}
 
 	// Catch ctrl-c and make sure to kill off children.
@@ -185,7 +191,7 @@ func main() {
 	for i := range reflexes {
 		broadcastChanges[i] = make(chan string)
 	}
-	go watch(".", watcher, changes, done, reflexes)
+	go watch(paths, watcher, changes, done, reflexes)
 	go broadcast(broadcastChanges, changes)
 	go printOutput(stdout, os.Stdout)
 

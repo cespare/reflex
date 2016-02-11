@@ -14,9 +14,11 @@ const chmodMask fsnotify.Op = ^fsnotify.Op(0) ^ fsnotify.Chmod
 // It sends an error on the done chan.
 // As an optimization, any dirs we encounter that meet the ExcludePrefix criteria of all reflexes can be
 // ignored.
-func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done chan<- error, reflexes []*Reflex) {
-	if err := filepath.Walk(root, walker(watcher, reflexes)); err != nil {
-		infoPrintf(-1, "Error while walking path %s: %s", root, err)
+func watch(root []string, watcher *fsnotify.Watcher, names chan<- string, done chan<- error, reflexes []*Reflex) {
+	for _, item := range root {
+		if err := filepath.Walk(item, walker(watcher, reflexes)); err != nil {
+			infoPrintf(-1, "Error while walking path %s: %s", root, err)
+		}
 	}
 
 	for {
