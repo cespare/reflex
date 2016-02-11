@@ -20,14 +20,18 @@ type Config struct {
 	globs          []string
 	inverseRegexes []string
 	inverseGlobs   []string
+	paths          []string
 	subSymbol      string
 	startService   bool
 	onlyFiles      bool
 	onlyDirs       bool
-	allFiles bool
+	allFiles       bool
 }
 
 func (c *Config) registerFlags(f *flag.FlagSet) {
+	f.VarP(newMultiString(nil, &c.paths), "path", "p", `
+            A directory to watch recursively.
+            If used, ONLY paths specified will be watched (May be repeated.)`)
 	f.VarP(newMultiString(nil, &c.regexes), "regex", "r", `
             A regular expression to match filenames. (May be repeated.)`)
 	f.VarP(newMultiString(nil, &c.inverseRegexes), "inverse-regex", "R", `
