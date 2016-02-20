@@ -23,4 +23,3 @@ There are just a few simple guidelines for reporting issues or submitting patche
 
 * Run `gofmt` on any code before committing.
 * Stick to the code style around you.
-* Line length is 110 (counting tabs as 2 spaces) -- this is just a rough guideline though.
