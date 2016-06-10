@@ -78,7 +78,7 @@ func init() {
 func anyNonGlobalsRegistered() bool {
 	any := false
 	walkFn := func(f *flag.Flag) {
-		if !(f.Name == "config" || f.Name == "verbose" || f.Name == "sequential" || f.Name == "decoration") {
+		if !(f.Name == "config" || f.Name == "verbose" || f.Name == "sequential" || f.Name == "decoration"|| f.Name == "chmods") {
 			any = any || true
 		}
 	}
@@ -142,7 +142,7 @@ func main() {
 		configs = []*Config{globalConfig}
 	} else {
 		if anyNonGlobalsRegistered() {
-			Fatalln("Cannot set other flags along with --config other than --sequential, --verbose, and --decoration.")
+			Fatalln("Cannot set other flags along with --config other than --sequential, --verbose, --decoration, and --chmods.")
 		}
 		var err error
 		configs, err = ReadConfigs(flagConf)
