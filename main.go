@@ -23,6 +23,7 @@ var (
 	flagDecoration string
 	decoration     Decoration
 	verbose        bool
+	chmods         bool
 	globalFlags    = flag.NewFlagSet("", flag.ContinueOnError)
 	globalConfig   = &Config{}
 
@@ -65,6 +66,8 @@ func init() {
             (or '-' to read the configuration from stdin).`)
 	globalFlags.BoolVarP(&verbose, "verbose", "v", false, `
             Verbose mode: print out more information about what reflex is doing.`)
+	globalFlags.BoolVarP(&chmods, "chmods", "m", false, `
+            Includes watching chmod *only* events.`)
 	globalFlags.BoolVarP(&flagSequential, "sequential", "e", false, `
             Don't run multiple commands at the same time.`)
 	globalFlags.StringVarP(&flagDecoration, "decoration", "d", "plain", `

@@ -30,7 +30,7 @@ func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done cha
 				continue
 			}
 			path := normalize(e.Name, stat.IsDir())
-			if e.Op&chmodMask == 0 {
+			if !chmods && e.Op&chmodMask == 0 {
 				continue
 			}
 			names <- path
