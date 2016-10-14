@@ -11,10 +11,9 @@ for reloading your application when the code changes.
 
 ## Installation
 
-    $ go get github.com/cespare/reflex
+You'll need Go 1.6+ installed and a Go workspace set up.
 
-Note that this has some dependencies outside of the Go standard library. You'll
-need git installed, and `go get` will automatically fetch them for you.
+    $ go get github.com/cespare/reflex
 
 Reflex probably only works on Linux and Mac OS.
 

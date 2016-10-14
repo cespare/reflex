@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"gopkg.in/fsnotify.v1"
+	"github.com/fsnotify/fsnotify"
 )
 
 const chmodMask fsnotify.Op = ^fsnotify.Op(0) ^ fsnotify.Chmod

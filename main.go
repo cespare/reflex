@@ -9,8 +9,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/fsnotify/fsnotify"
 	flag "github.com/ogier/pflag"
-	"gopkg.in/fsnotify.v1"
 )
 
 const defaultSubSymbol = "{}"
