@@ -145,12 +145,13 @@ func (r *Reflex) filterMatching(out chan<- string, in <-chan string) {
 	}
 }
 
-// batch receives realtime file notification events and batches them up. It's a bit tricky, but here's what
-// it accomplishes:
-// * When we initially get a message, wait a bit and batch messages before trying to send anything. This is
-//	 because the file events come in quick bursts.
-// * Once it's time to send, don't do it until the out channel is unblocked. In the meantime, keep batching.
-//   When we've sent off all the batched messages, go back to the beginning.
+// batch receives file notification events and batches them up. It's a bit
+// tricky, but here's what it accomplishes:
+// * When we initially get a message, wait a bit and batch messages before
+//   trying to send anything. This is because the file events come in bursts.
+// * Once it's time to send, don't do it until the out channel is unblocked.
+//   In the meantime, keep batching. When we've sent off all the batched
+//   messages, go back to the beginning.
 func (r *Reflex) batch(out chan<- string, in <-chan string) {
 	for name := range in {
 		r.backlog.Add(name)
@@ -176,8 +177,9 @@ func (r *Reflex) batch(out chan<- string, in <-chan string) {
 	}
 }
 
-// runEach runs the command on each name that comes through the names channel. Each {} is replaced by the name
-// of the file. The output of the command is passed line-by-line to the stdout chan.
+// runEach runs the command on each name that comes through the names channel.
+// Each {} is replaced by the name of the file. The output of the command is
+// passed line-by-line to the stdout chan.
 func (r *Reflex) runEach(names <-chan string) {
 	for name := range names {
 		if r.startService {
@@ -202,7 +204,8 @@ func (r *Reflex) terminate() {
 	r.killed = true
 	r.mu.Unlock()
 	// Write ascii 3 (what you get from ^C) to the controlling pty.
-	// (This won't do anything if the process already died as the write will simply fail.)
+	// (This won't do anything if the process already died as the write will
+	// simply fail.)
 	r.tty.Write([]byte{3})
 
 	timer := time.NewTimer(r.timeout)
@@ -218,8 +221,9 @@ func (r *Reflex) terminate() {
 				infoPrintln(r.id, "Sending SIGKILL signal...")
 			}
 
-			// Instead of killing the process, we want to kill its whole pgroup in order to clean up any children
-			// the process may have created.
+			// Instead of killing the process, we want to kill its
+			// whole pgroup in order to clean up any children the
+			// process may have created.
 			if err := syscall.Kill(-1*r.cmd.Process.Pid, sig); err != nil {
 				infoPrintln(r.id, "Error killing:", err)
 				if err.(syscall.Errno) == syscall.ESRCH { // no such process
@@ -244,7 +248,8 @@ func replaceSubSymbol(command []string, subSymbol string, name string) []string 
 
 var seqCommands = &sync.Mutex{}
 
-// runCommand runs the given Command. All output is passed line-by-line to the stdout channel.
+// runCommand runs the given Command. All output is passed line-by-line to the
+// stdout channel.
 func (r *Reflex) runCommand(name string, stdout chan<- OutMsg) {
 	command := replaceSubSymbol(r.command, r.subSymbol, name)
 	cmd := exec.Command(command[0], command[1:]...)
@@ -266,9 +271,10 @@ func (r *Reflex) runCommand(name string, stdout chan<- OutMsg) {
 		for scanner.Scan() {
 			stdout <- OutMsg{r.id, scanner.Text()}
 		}
-		// Intentionally ignoring scanner.Err() for now.
-		// Unfortunately, the pty returns a read error when the child dies naturally, so I'm just going to ignore
-		// errors here unless I can find a better way to handle it.
+		// Intentionally ignoring scanner.Err() for now. Unfortunately,
+		// the pty returns a read error when the child dies naturally,
+		// so I'm just going to ignore errors here unless I can find a
+		// better way to handle it.
 	}()
 
 	r.mu.Lock()

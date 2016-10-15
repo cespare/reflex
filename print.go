@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"os"
 	"strings"
 )
 
@@ -25,11 +24,6 @@ const (
 type OutMsg struct {
 	reflexID int
 	msg      string
-}
-
-func Fatalln(args ...interface{}) {
-	fmt.Println(args...)
-	os.Exit(1)
 }
 
 func infoPrintln(id int, args ...interface{}) {

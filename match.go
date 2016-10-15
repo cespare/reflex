@@ -13,14 +13,16 @@ import (
 type Matcher interface {
 	// Match returns whether a filename matches.
 	Match(name string) bool
-	// ExcludePrefix returns whether all paths with this prefix cannot match. It is allowed to return false
-	// negatives but not false positives. This is used as an optimization for skipping directory watches with
+	// ExcludePrefix returns whether all paths with this prefix cannot match.
+	// It is allowed to return false negatives but not false positives.
+	// This is used as an optimization for skipping directory watches with
 	// inverted matches.
 	ExcludePrefix(prefix string) bool
 	String() string
 }
 
-// ParseMatchers combines multiple (possibly inverse) regex and glob patterns into a single Matcher.
+// ParseMatchers combines multiple (possibly inverse) regex and glob patterns
+// into a single Matcher.
 func ParseMatchers(regexes, inverseRegexes, globs, inverseGlobs []string) (m Matcher, err error) {
 	var matchers multiMatcher
 	if len(regexes) == 0 && len(globs) == 0 {
@@ -103,22 +105,25 @@ func newRegexMatcher(regex *regexp.Regexp, inverse bool) *regexMatcher {
 	}
 }
 
-// ExcludePrefix returns whether this matcher cannot possibly match any path with a particular prefix.
-// The question is: given a regex r and some prefix p which r accepts, is there any string s that has p as a
-// prefix that r does not accept?
-// With a classic regular expression from CS, this can only be the case if r ends with $, the end-of-input
-// token (because once the NFA is in an accepting state, adding more input will not change that).
-// In Go's regular expressions, I think the only way to construct a regex that would not meet this criteria is
-// by using zero-width lookahead. There is no arbitrary lookahead in Go, so I believe that the only zero-width
-// lookahead is provided by $, \z, and \b. For instance, the following regular expressions match the "foo",
-// but not "foobar":
+// ExcludePrefix returns whether this matcher cannot possibly match any path
+// with a particular prefix. The question is: given a regex r and some prefix p
+// which r accepts, is there any string s that has p as a prefix that r does not
+// accept?
+//
+// With a classic regular expression from CS, this can only be the case if r
+// ends with $, the end-of-input token (because once the NFA is in an accepting
+// state, adding more input will not change that). In Go's regular expressions,
+// I think the only way to construct a regex that would not meet this criteria
+// is by using zero-width lookahead. There is no arbitrary lookahead in Go, so
+// the only zero-width lookahead is provided by $, \z, and \b. For instance, the
+// following regular expressions match the "foo", but not "foobar":
 //
 //   foo$
 //   foo\b
 //   (foo$)|(baz$)
 //
-// Thus, to choose whether we can exclude this prefix, m must be an inverse matcher that does not contain the
-// zero-width ops $, \z, and \b.
+// Thus, to choose whether we can exclude this prefix, m must be an inverse
+// matcher that does not contain the zero-width ops $, \z, and \b.
 func (m *regexMatcher) ExcludePrefix(prefix string) bool {
 	if !m.inverse {
 		return false

@@ -5,63 +5,79 @@ import (
 	"testing"
 )
 
-func TestGlobMatcher(t *testing.T) {
-	m := &globMatcher{glob: "foo*"}
-	equals(t, true, m.Match("foo"))
-	equals(t, true, m.Match("foobar"))
-	equals(t, false, m.Match("bar"))
-	m = &globMatcher{glob: "foo*", inverse: true}
-	equals(t, false, m.Match("foo"))
-	equals(t, false, m.Match("foobar"))
-	equals(t, true, m.Match("bar"))
-}
+func TestMatchers(t *testing.T) {
+	var (
+		glob    = &globMatcher{glob: "foo*"}
+		globInv = &globMatcher{glob: "foo*", inverse: true}
 
-func TestRegexMatcher(t *testing.T) {
-	m := newRegexMatcher(regexp.MustCompile("foo.*"), false)
-	equals(t, true, m.Match("foo"))
-	equals(t, true, m.Match("foobar"))
-	equals(t, false, m.Match("bar"))
-	m = newRegexMatcher(regexp.MustCompile("foo.*"), true)
-	equals(t, false, m.Match("foo"))
-	equals(t, false, m.Match("foobar"))
-	equals(t, true, m.Match("bar"))
+		regex    = newRegexMatcher(regexp.MustCompile("foo.*"), false)
+		regexInv = newRegexMatcher(regexp.MustCompile("foo.*"), true)
+
+		multi = multiMatcher{
+			newRegexMatcher(regexp.MustCompile("foo"), false),
+			newRegexMatcher(regexp.MustCompile(`\.go$`), false),
+			newRegexMatcher(regexp.MustCompile("foobar"), true),
+		}
+	)
+	for _, tt := range []struct {
+		m    Matcher
+		s    string
+		want bool
+	}{
+		{glob, "foo", true},
+		{glob, "foobar", true},
+		{glob, "bar", false},
+		{globInv, "foo", false},
+		{globInv, "foobar", false},
+		{globInv, "bar", true},
+
+		{regex, "foo", true},
+		{regex, "foobar", true},
+		{regex, "bar", false},
+		{regexInv, "foo", false},
+		{regexInv, "foobar", false},
+		{regexInv, "bar", true},
+
+		{multi, "foo.go", true},
+		{multi, "foo/bar.go", true},
+		{multi, "foobar/blah.go", false},
+	} {
+		if got := tt.m.Match(tt.s); got != tt.want {
+			t.Errorf("(%v).Match(%q): got %t; want %t",
+				tt.m, tt.s, got, tt.want)
+		}
+	}
 }
 
 func TestExcludePrefix(t *testing.T) {
 	m := newRegexMatcher(regexp.MustCompile("foo"), false)
-	equals(t, false, m.ExcludePrefix("bar")) // Never true for non-inverted
+	if m.ExcludePrefix("bar") {
+		t.Error("m.ExcludePrefix gave true for a non-inverted matcher")
+	}
 
-	for _, testCase := range []struct {
-		re       string
-		prefix   string
-		expected bool
+	for _, tt := range []struct {
+		re     string
+		prefix string
+		want   bool
 	}{
-		{re: "foo", prefix: "foo", expected: true},
-		{re: "((foo{3,4})|abc*)+|foo", prefix: "foo", expected: true},
-		{re: "foo$", prefix: "foo", expected: false},
-		{re: `foo\b`, prefix: "foo", expected: false},
-		{re: `(foo\b)|(baz$)`, prefix: "foo", expected: false},
+		{"foo", "foo", true},
+		{"((foo{3,4})|abc*)+|foo", "foo", true},
+		{"foo$", "foo", false},
+		{`foo\b`, "foo", false},
+		{`(foo\b)|(baz$)`, "foo", false},
 	} {
-		m := newRegexMatcher(regexp.MustCompile(testCase.re), true)
-		equals(t, testCase.expected, m.ExcludePrefix(testCase.prefix))
+		m := newRegexMatcher(regexp.MustCompile(tt.re), true)
+		if got := m.ExcludePrefix(tt.prefix); got != tt.want {
+			t.Errorf("(%v).ExcludePrefix(%q): got %t; want %t",
+				m, tt.prefix, got, tt.want)
+		}
 	}
-}
-
-func TestMultiMatcher(t *testing.T) {
-	m := multiMatcher{
-		newRegexMatcher(regexp.MustCompile("foo"), false),
-		newRegexMatcher(regexp.MustCompile(`\.go$`), false),
-		newRegexMatcher(regexp.MustCompile("foobar"), true),
-	}
-	equals(t, true, m.Match("foo.go"))
-	equals(t, true, m.Match("foo/bar.go"))
-	equals(t, false, m.Match("foobar/blah.go"))
 }
 
 func TestDefaultExcludes(t *testing.T) {
-	for _, testCase := range []struct {
-		filename string
-		expected bool
+	for _, tt := range []struct {
+		name string
+		want bool
 	}{
 		{".git/HEAD", false},
 		{"foo.git", true},
@@ -82,12 +98,12 @@ func TestDefaultExcludes(t *testing.T) {
 		{".DS_Store", false},
 		{"foo/.DS_Store", false},
 	} {
-		exp := testCase.expected
-		got := defaultExcludeMatcher.Match(testCase.filename)
-		s := "was excluded"
-		if !exp {
-			s = "was not excluded"
+		if got := defaultExcludeMatcher.Match(tt.name); got != tt.want {
+			if got {
+				t.Errorf("%q was excluded by the default excludes matcher", tt.name)
+			} else {
+				t.Errorf("%q was not excluded by the default excludes matcher", tt.name)
+			}
 		}
-		assert(t, exp == got, "%q %s the default excludes matcher", testCase.filename, s)
 	}
 }

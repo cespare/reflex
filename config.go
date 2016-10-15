@@ -55,7 +55,8 @@ func (c *Config) registerFlags(f *flag.FlagSet) {
             Include normally ignored files (VCS and editor special files).`)
 }
 
-// ReadConfigs reads configurations from either a file or, as a special case, stdin if "-" is given for path.
+// ReadConfigs reads configurations from either a file or, as a special case,
+// stdin if "-" is given for path.
 func ReadConfigs(path string) ([]*Config, error) {
 	var r io.Reader
 	name := path

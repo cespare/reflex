@@ -1,15 +1,17 @@
 package main
 
-// A Backlog represents a backlog of file paths that may be received while we're still running a command.
-// There are a couple of different policies for how to handle this. If there are no {} (substitution
-// sequences) in the command, then we only need to preserve one of the paths. If there is a {}, then we need
-// to preserve each unique path in the backlog.
+// A Backlog represents a queue of file paths that may be received while we're
+// still running a command. There are a couple of different policies for how to
+// handle this. If there are no {} (substitution sequences) in the command, then
+// we only need to preserve one of the paths. If there is a {}, then we need to
+// preserve each unique path in the backlog.
 type Backlog interface {
 	// Add a path to the backlog.
 	Add(path string)
-	// Show what path should be processed next (without removing it from the backlog).
+	// Show what path should be processed next.
 	Next() string
-	// Remove the next path from the backlog and returns whether the backlog is now empty.
+	// Remove the next path from the backlog and return whether
+	// the backlog is now empty.
 	RemoveOne() (empty bool)
 }
 
@@ -23,7 +25,8 @@ func NewUnifiedBacklog() *UnifiedBacklog {
 	return &UnifiedBacklog{empty: true}
 }
 
-// Add adds path to b if there is not a path there currently. Otherwise it discards it.
+// Add adds path to b if there is not a path there currently.
+// Otherwise it discards it.
 func (b *UnifiedBacklog) Add(path string) {
 	if b.empty {
 		b.s = path
@@ -57,7 +60,11 @@ type UniqueFilesBacklog struct {
 }
 
 func NewUniqueFilesBacklog() *UniqueFilesBacklog {
-	return &UniqueFilesBacklog{empty: true, next: "", rest: make(map[string]struct{})}
+	return &UniqueFilesBacklog{
+		empty: true,
+		next:  "",
+		rest:  make(map[string]struct{}),
+	}
 }
 
 // Add adds path to the set of files in b.
@@ -81,7 +88,8 @@ func (b *UniqueFilesBacklog) Next() string {
 	return b.next
 }
 
-// RemoveOne removes one of the paths from b (the same path that was returned by a preceding call to Next).
+// RemoveOne removes one of the paths from b (the same path that was returned by
+// a preceding call to Next).
 func (b *UniqueFilesBacklog) RemoveOne() bool {
 	if b.empty {
 		panic("RemoveOne() called on empty backlog")

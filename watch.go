@@ -12,8 +12,8 @@ const chmodMask fsnotify.Op = ^fsnotify.Op(0) ^ fsnotify.Chmod
 
 // watch recursively watches changes in root and reports the filenames to names.
 // It sends an error on the done chan.
-// As an optimization, any dirs we encounter that meet the ExcludePrefix criteria of all reflexes can be
-// ignored.
+// As an optimization, any dirs we encounter that meet the ExcludePrefix
+// criteria of all reflexes can be ignored.
 func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done chan<- error, reflexes []*Reflex) {
 	if err := filepath.Walk(root, walker(watcher, reflexes)); err != nil {
 		infoPrintf(-1, "Error while walking path %s: %s", root, err)
@@ -39,7 +39,8 @@ func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done cha
 					infoPrintf(-1, "Error while walking path %s: %s", path, err)
 				}
 			}
-			// TODO: Cannot currently remove fsnotify watches recursively, or for deleted files. See:
+			// TODO: Cannot currently remove fsnotify watches
+			// recursively, or for deleted files. See:
 			// https://github.com/cespare/reflex/issues/13
 			// https://github.com/go-fsnotify/fsnotify/issues/40
 			// https://github.com/go-fsnotify/fsnotify/issues/41

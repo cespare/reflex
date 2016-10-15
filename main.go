@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"os/signal"
 	"strings"
@@ -75,8 +76,10 @@ func init() {
 func anyNonGlobalsRegistered() bool {
 	any := false
 	walkFn := func(f *flag.Flag) {
-		if !(f.Name == "config" || f.Name == "verbose" || f.Name == "sequential" || f.Name == "decoration") {
-			any = any || true
+		switch f.Name {
+		case "config", "verbose", "sequential", "decoration":
+		default:
+			any = true
 		}
 	}
 	globalFlags.Visit(walkFn)
@@ -86,7 +89,8 @@ func anyNonGlobalsRegistered() bool {
 func printGlobals() {
 	fmt.Println("Globals set at commandline")
 	walkFn := func(f *flag.Flag) {
-		fmt.Printf("| --%s (-%s) '%s' (default: '%s')\n", f.Name, f.Shorthand, f.Value, f.DefValue)
+		fmt.Printf("| --%s (-%s) '%s' (default: '%s')\n",
+			f.Name, f.Shorthand, f.Value, f.DefValue)
 	}
 	globalFlags.Visit(walkFn)
 	fmt.Println("+---------")
@@ -112,8 +116,9 @@ func cleanup(reason string) {
 }
 
 func main() {
+	log.SetFlags(0)
 	if err := globalFlags.Parse(os.Args[1:]); err != nil {
-		Fatalln(err)
+		log.Fatal(err)
 	}
 	globalConfig.command = globalFlags.Args()
 	globalConfig.source = "[commandline]"
@@ -128,33 +133,33 @@ func main() {
 	case "fancy":
 		decoration = DecorationFancy
 	default:
-		Fatalln(fmt.Sprintf("Invalid decoration %s. Choices: none, plain, fancy.", flagDecoration))
+		log.Fatalf("Invalid decoration %s. Choices: none, plain, fancy.", flagDecoration)
 	}
 
 	var configs []*Config
 	if flagConf == "" {
 		if flagSequential {
-			Fatalln("Cannot set --sequential without --config (because you cannot specify multiple commands).")
+			log.Fatal("Cannot set --sequential without --config (because you cannot specify multiple commands).")
 		}
 		configs = []*Config{globalConfig}
 	} else {
 		if anyNonGlobalsRegistered() {
-			Fatalln("Cannot set other flags along with --config other than --sequential, --verbose, and --decoration.")
+			log.Fatal("Cannot set other flags along with --config other than --sequential, --verbose, and --decoration.")
 		}
 		var err error
 		configs, err = ReadConfigs(flagConf)
 		if err != nil {
-			Fatalln("Could not parse configs: ", err)
+			log.Fatalln("Could not parse configs:", err)
 		}
 		if len(configs) == 0 {
-			Fatalln("No configurations found")
+			log.Fatal("No configurations found")
 		}
 	}
 
 	for _, config := range configs {
 		reflex, err := NewReflex(config)
 		if err != nil {
-			Fatalln("Could not make reflex for config:", err)
+			log.Fatalln("Could not make reflex for config:", err)
 		}
 		if verbose {
 			fmt.Println(reflex)
@@ -175,7 +180,7 @@ func main() {
 
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
-		Fatalln(err)
+		log.Fatal(err)
 	}
 	defer watcher.Close()
 
@@ -193,7 +198,7 @@ func main() {
 		reflex.Start(broadcastChanges[i])
 	}
 
-	Fatalln(<-done)
+	log.Fatal(<-done)
 }
 
 func broadcast(outs []chan string, in <-chan string) {
