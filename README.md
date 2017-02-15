@@ -17,7 +17,7 @@ You'll need Go 1.6+ installed and a Go workspace set up.
 
 Reflex probably only works on Linux and Mac OS.
 
-TODO: provide compiled downloads for linux/darwin amd64.
+Binaries can be downloaded on the [cespare/reflex releases](https://github.com/cespare/reflex/releases) page.
 
 ## Usage
 

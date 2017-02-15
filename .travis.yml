@@ -1,0 +1,19 @@
+sudo: false
+language: go
+go: 1.4
+before_deploy:
+  - go get github.com/mitchellh/gox
+  - gox -osarch "linux/amd64 darwin/amd64" -build-toolchain
+  - gox -osarch "linux/amd64 darwin/amd64" -output "reflex_{{.OS}}_{{.Arch}}"
+deploy:
+  provider: releases
+  api_key:
+    secure: kogIZcMXByjEB6KwTYR/h9CzYkwBxiTyNcmi8cWEf8MNF2IIn5I8g3Pg87Wx0qAjd92HR4i/SMROxffHJzPO2UCuTcoZAyaKuXR7/jaaML6JY/2rhL44sjrUFJ8JLyhCKPh4IznjjT2TzpgCF13khyJIpchUWG3UQCIxYjbgGRU=
+  file:
+  - reflex_darwin_amd64
+  - reflex_linux_amd64
+  on:
+    repo: cespare/reflex
+    all_branches: true
+    tags: true
+    go: go1.4
