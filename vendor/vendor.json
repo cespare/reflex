@@ -3,10 +3,10 @@
 	"ignore": "",
 	"package": [
 		{
-			"checksumSHA1": "fdxUnxCy6vxzGtK9LYTlFy1/zak=",
+			"checksumSHA1": "LE7q4aPITU5N090e8Y8RdW0MNJ0=",
 			"path": "github.com/fsnotify/fsnotify",
-			"revision": "bd2828f9f176e52d7222e565abb2d338d3f3c103",
-			"revisionTime": "2016-10-13T01:22:19Z"
+			"revision": "4da3e2cfbabc9f751898f250b49f2439785783a1",
+			"revisionTime": "2017-03-29T04:21:07Z"
 		},
 		{
 			"checksumSHA1": "pToEd6e/WFoAB75c1d5st2kVsEs=",
@@ -39,10 +39,10 @@
 			"revisionTime": "2016-01-29T22:01:14Z"
 		},
 		{
-			"checksumSHA1": "ZH5iSCEe5IYU8yeL+OGXS/OARVo=",
+			"checksumSHA1": "aeGV0ftSt6WC5Of1qNdOyqQGl6w=",
 			"path": "golang.org/x/sys/unix",
-			"revision": "9bb9f0998d48b31547d975974935ae9b48c7a03c",
-			"revisionTime": "2016-10-11T23:07:22Z"
+			"revision": "8eb05f94d449fdf134ec24630ce69ada5b469c1c",
+			"revisionTime": "2017-11-04T16:30:55Z"
 		}
 	],
 	"rootPath": "github.com/cespare/reflex"
