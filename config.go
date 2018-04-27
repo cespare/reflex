@@ -89,6 +89,10 @@ parseFile:
 
 		// Found a command line; begin parsing it
 		errorf := fmt.Sprintf("error on line %d of %s: %%s", lineNo, name)
+
+		c := &Config{}
+		c.source = fmt.Sprintf("%s, line %d", name, lineNo)
+
 		line := scanner.Text()
 		parts, err := shellquote.Split(line)
 
@@ -112,16 +116,13 @@ parseFile:
 			parts, err = shellquote.Split(line)
 		}
 
-		c := &Config{}
 		flags := flag.NewFlagSet("", flag.ContinueOnError)
 		flags.SetOutput(ioutil.Discard)
 		c.registerFlags(flags)
-
 		if err := flags.Parse(parts); err != nil {
 			return nil, fmt.Errorf(errorf, err)
 		}
 		c.command = flags.Args()
-		c.source = fmt.Sprintf("%s, line %d", name, lineNo)
 		configs = append(configs, c)
 	}
 	if err := scanner.Err(); err != nil {

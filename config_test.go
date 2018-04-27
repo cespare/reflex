@@ -53,7 +53,7 @@ world"
 		},
 		{
 			command:         []string{"echo", "hello\nworld"},
-			source:          "test input, line 10",
+			source:          "test input, line 8",
 			regexes:         []string{"foo", "bar"},
 			globs:           []string{"a"},
 			inverseRegexes:  []string{"baz"},
