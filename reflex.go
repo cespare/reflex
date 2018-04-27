@@ -161,6 +161,10 @@ func (r *Reflex) batch(out chan<- string, in <-chan string) {
 			select {
 			case name := <-in:
 				r.backlog.Add(name)
+				if !timer.Stop() {
+					<-timer.C
+				}
+				timer.Reset(300 * time.Millisecond)
 			case <-timer.C:
 				for {
 					select {
