@@ -14,8 +14,12 @@ func TestReadConfigs(t *testing.T) {
 
 # Some comment here
 -r '^a[0-9]+\.txt$' --only-dirs --substitute='[]' echo []
+
 -g '*.go' -s --only-files echo hi
--r foo -r bar -R baz -g a -G b -G c echo hi
+
+-r foo -r bar -R baz -g a \
+	-G b -G c echo "hello
+world"
 `
 
 	got, err := readConfigsFromReader(strings.NewReader(in), "test input")
@@ -40,7 +44,7 @@ func TestReadConfigs(t *testing.T) {
 		},
 		{
 			command:         []string{"echo", "hi"},
-			source:          "test input, line 5",
+			source:          "test input, line 6",
 			globs:           []string{"*.go"},
 			subSymbol:       "{}",
 			startService:    true,
@@ -48,8 +52,8 @@ func TestReadConfigs(t *testing.T) {
 			onlyFiles:       true,
 		},
 		{
-			command:         []string{"echo", "hi"},
-			source:          "test input, line 6",
+			command:         []string{"echo", "hello\nworld"},
+			source:          "test input, line 10",
 			regexes:         []string{"foo", "bar"},
 			globs:           []string{"a"},
 			inverseRegexes:  []string{"baz"},
