@@ -138,13 +138,17 @@ reflex a configuration file.
 
 The configuration file syntax is simple: each line is a command, and each
 command is composed of flags and arguments -- just like calling reflex but
-without the initial `reflex`. Lines that start with `#` are ignored. Here's an
-example:
+without the initial `reflex`. Lines that start with `#` are ignored. Commands
+can span multiple lines if they're \\-continued, or include multi-line strings.
+Here's an example:
 
     # Rebuild SCSS when it changes
-    -r '\.scss$' -- sh -c 'sass {} `basename {} .scss`.css'
+    -r '\.scss$' -- \
+       sh -c 'sass {} `basename {} .scss`.css'
+    
     # Restart server when ruby code changes
-    -sr '\.rb$' -- ./bin/run_server.sh
+    -sr '\.rb$' -- \
+        ./bin/run_server.sh
 
 If you want to change the configuration file and have reflex reload it on the
 fly, you can run reflex inside reflex:

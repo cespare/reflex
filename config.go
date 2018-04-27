@@ -78,21 +78,45 @@ func readConfigsFromReader(r io.Reader, name string) ([]*Config, error) {
 	scanner := bufio.NewScanner(r)
 	lineNo := 0
 	var configs []*Config
+parseFile:
 	for scanner.Scan() {
 		lineNo++
+		// Skip empty lines and comments (lines starting with #).
+		trimmed := strings.TrimSpace(scanner.Text())
+		if len(trimmed) == 0 || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+
+		// Found a command line; begin parsing it
 		errorf := fmt.Sprintf("error on line %d of %s: %%s", lineNo, name)
+		line := scanner.Text()
+		parts, err := shellquote.Split(line)
+
+		// Loop while the input line ends with \ or an unfinished quoted string
+		for err != nil {
+			if err == shellquote.UnterminatedEscapeError {
+				// Strip the trailing backslash
+				line = line[:len(line)-1]
+			}
+			if !scanner.Scan() {
+				if scanner.Err() != nil {
+					// Error reading the file, not EOF, so return that
+					break parseFile
+				}
+				// EOF, return the most recent error with the line where the command started
+				return nil, fmt.Errorf(errorf, err)
+			}
+			// append the next line and parse again
+			lineNo++
+			line += "\n" + scanner.Text()
+			parts, err = shellquote.Split(line)
+		}
+
 		c := &Config{}
 		flags := flag.NewFlagSet("", flag.ContinueOnError)
 		flags.SetOutput(ioutil.Discard)
 		c.registerFlags(flags)
-		parts, err := shellquote.Split(scanner.Text())
-		if err != nil {
-			return nil, fmt.Errorf(errorf, err)
-		}
-		// Skip empty lines and comments (lines starting with #).
-		if len(parts) == 0 || strings.HasPrefix(parts[0], "#") {
-			continue
-		}
+
 		if err := flags.Parse(parts); err != nil {
 			return nil, fmt.Errorf(errorf, err)
 		}
