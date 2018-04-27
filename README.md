@@ -327,6 +327,7 @@ background on this issue.
 
 * Benedikt Böhm ([hollow](https://github.com/hollow))
 * Caleb Spare ([cespare](https://github.com/cespare))
+* PJ Eby ([pjeby](https://github.com/pjeby))
 * Rich Liebling ([rliebling](https://github.com/rliebling))
 * Seth W. Klein ([sethwklein](https://github.com/sethwklein))
 * Vincent Vanackere ([vanackere](https://github.com/vanackere))
