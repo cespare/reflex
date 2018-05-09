@@ -77,7 +77,7 @@ func TestReadConfigsBad(t *testing.T) {
 		if configs, err := readConfigsFromReader(r, "test input"); err == nil {
 			for _, config := range configs {
 				if _, err := NewReflex(config); err == nil {
-					t.Errorf("readConfigsFromReader(%q): got nil error")
+					t.Errorf("readConfigsFromReader(%q): got nil error", in)
 				}
 			}
 		}

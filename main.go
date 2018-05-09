@@ -45,7 +45,7 @@ OPTIONS are given below:
 
 	globalFlags.PrintDefaults()
 
-	fmt.Fprintln(os.Stderr, `
+	fmt.Fprint(os.Stderr, `
 Examples:
 
     # Print each .txt file if it changes
@@ -56,6 +56,7 @@ Examples:
 
     # Build and run a server; rebuild and restart when .java files change:
     $ reflex -r '\.java$' -s -- sh -c 'make && java bin/Server'
+
 `)
 }
 
