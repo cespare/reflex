@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
 	"sync"
 	"syscall"
@@ -273,6 +274,17 @@ func (r *Reflex) runCommand(name string, stdout chan<- OutMsg) {
 	}
 	r.tty = tty
 
+	// Handle pty size.
+	chResize := make(chan os.Signal, 1)
+	signal.Notify(chResize, syscall.SIGWINCH)
+	go func() {
+		for range chResize {
+			// Intentionally ignore errors in case stdout is not a tty
+			pty.InheritSize(os.Stdout, tty)
+		}
+	}()
+	chResize <- syscall.SIGWINCH // Initial resize.
+
 	go func() {
 		scanner := bufio.NewScanner(tty)
 		for scanner.Scan() {
@@ -293,6 +305,10 @@ func (r *Reflex) runCommand(name string, stdout chan<- OutMsg) {
 			stdout <- OutMsg{r.id, fmt.Sprintf("(error exit: %s)", err)}
 		}
 		r.done <- struct{}{}
+
+		signal.Stop(chResize)
+		close(chResize)
+
 		if flagSequential {
 			seqCommands.Unlock()
 		}
