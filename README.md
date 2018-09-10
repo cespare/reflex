@@ -11,7 +11,7 @@ for reloading your application when the code changes.
 
 ## Installation
 
-You'll need Go 1.6+ installed and a Go workspace set up.
+You'll need Go 1.11+ installed:
 
     $ go get github.com/cespare/reflex
 
