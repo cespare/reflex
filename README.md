@@ -145,7 +145,7 @@ Here's an example:
     # Rebuild SCSS when it changes
     -r '\.scss$' -- \
        sh -c 'sass {} `basename {} .scss`.css'
-    
+
     # Restart server when ruby code changes
     -sr '\.rb$' -- \
         ./bin/run_server.sh
