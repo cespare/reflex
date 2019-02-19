@@ -26,17 +26,19 @@ func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done cha
 				infoPrintln(-1, "fsnotify event:", e)
 			}
 			stat, err := os.Stat(e.Name)
-			if err != nil {
-				continue
-			}
-			path := normalize(e.Name, stat.IsDir())
-			if e.Op&chmodMask == 0 {
-				continue
-			}
-			names <- path
-			if e.Op&fsnotify.Create > 0 && stat.IsDir() {
-				if err := filepath.Walk(path, walker(watcher, reflexes)); err != nil {
-					infoPrintf(-1, "Error while walking path %s: %s", path, err)
+			if os.IsNotExist(err) {
+				path := e.Name
+				names <- path
+			} else {
+				path := normalize(e.Name, stat.IsDir())
+				if e.Op&chmodMask == 0 {
+					continue
+				}
+				names <- path
+				if e.Op&fsnotify.Create > 0 && stat.IsDir() {
+					if err := filepath.Walk(path, walker(watcher, reflexes)); err != nil {
+						infoPrintf(-1, "Error while walking path %s: %s", path, err)
+					}
 				}
 			}
 			// TODO: Cannot currently remove fsnotify watches
