@@ -75,7 +75,33 @@ func (m *globMatcher) Match(name string) bool {
 	return matches != m.inverse
 }
 
-func (m *globMatcher) ExcludePrefix(prefix string) bool { return false }
+func (m *globMatcher) ExcludePrefix(prefix string) bool {
+	if !m.inverse || len(m.glob) == 0 {
+		return false
+	}
+
+	matches, err := doublestar.PathMatch(m.glob, prefix)
+	if err != nil || matches {
+		return false
+	}
+
+	var i = 0
+	for {
+		if m.glob[i] == '/' {
+			i++
+		}
+		pos := strings.Index(m.glob[i:], "/")
+		if pos == -1 {
+			return true
+		}
+		i += pos
+
+		matches, _ := doublestar.PathMatch(m.glob[:i], prefix)
+		if matches {
+			return false
+		}
+	}
+}
 
 func (m *globMatcher) String() string {
 	s := "Glob"
