@@ -81,26 +81,33 @@ func (m *globMatcher) ExcludePrefix(prefix string) bool {
 	}
 
 	matches, err := doublestar.PathMatch(m.glob, prefix)
-	if err != nil || matches {
+	switch {
+	case err != nil:
 		return false
+	case matches:
+		return true
 	}
 
 	var i = 0
-	for {
+	for i != len(m.glob) {
 		if m.glob[i] == '/' {
 			i++
 		}
 		pos := strings.Index(m.glob[i:], "/")
-		if pos == -1 {
-			return true
+		switch {
+		case pos == -1:
+			i = len(m.glob)
+		default:
+			i += pos
 		}
-		i += pos
 
 		matches, _ := doublestar.PathMatch(m.glob[:i], prefix)
 		if matches {
-			return false
+			return true
 		}
 	}
+
+	return false
 }
 
 func (m *globMatcher) String() string {

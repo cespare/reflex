@@ -60,12 +60,12 @@ func TestExcludePrefixGlob(t *testing.T) {
 		prefix string
 		want   bool
 	}{
-		{"foo", "foo", false},
-		{"foo/*", "foo/bar", false},
-		{"foo/**", "foo/bar/baz", false},
-		{"foo/*", "foo/bar/baz", true},
-		{"bar/*", "foo", true},
-		{"bar", "foo", true},
+		{"foo", "foo", true},
+		{"foo/*", "foo/bar", true},
+		{"foo/**", "foo/bar/baz", true},
+		{"foo/*", "foo/bar/baz", false},
+		{"bar/*", "foo", false},
+		{"bar", "foo", false},
 	} {
 		m := &globMatcher{glob: tt.glob, inverse: true}
 		if got := m.ExcludePrefix(tt.prefix); got != tt.want {
