@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
 	"regexp"
 	"regexp/syntax"
 	"strings"
 	"sync"
+
+	"github.com/bmatcuk/doublestar"
 )
 
 // A Matcher decides whether some filename matches its set of patterns.
@@ -67,14 +68,47 @@ type globMatcher struct {
 }
 
 func (m *globMatcher) Match(name string) bool {
-	matches, err := filepath.Match(m.glob, name)
+	matches, err := doublestar.PathMatch(m.glob, name)
 	if err != nil {
 		return false
 	}
 	return matches != m.inverse
 }
 
-func (m *globMatcher) ExcludePrefix(prefix string) bool { return false }
+func (m *globMatcher) ExcludePrefix(prefix string) bool {
+	if !m.inverse || len(m.glob) == 0 {
+		return false
+	}
+
+	matches, err := doublestar.PathMatch(m.glob, prefix)
+	switch {
+	case err != nil:
+		return false
+	case matches:
+		return true
+	}
+
+	var i = 0
+	for i != len(m.glob) {
+		if m.glob[i] == '/' {
+			i++
+		}
+		pos := strings.Index(m.glob[i:], "/")
+		switch {
+		case pos == -1:
+			i = len(m.glob)
+		default:
+			i += pos
+		}
+
+		matches, _ := doublestar.PathMatch(m.glob[:i], prefix)
+		if matches {
+			return true
+		}
+	}
+
+	return false
+}
 
 func (m *globMatcher) String() string {
 	s := "Glob"

@@ -49,7 +49,33 @@ func TestMatchers(t *testing.T) {
 	}
 }
 
-func TestExcludePrefix(t *testing.T) {
+func TestExcludePrefixGlob(t *testing.T) {
+	m := &globMatcher{glob: "foo"}
+	if m.ExcludePrefix("bar") {
+		t.Error("m.ExcludePrefix gave true for non-inverted matcher")
+	}
+
+	for _, tt := range []struct {
+		glob   string
+		prefix string
+		want   bool
+	}{
+		{"foo", "foo", true},
+		{"foo/*", "foo/bar", true},
+		{"foo/**", "foo/bar/baz", true},
+		{"foo/*", "foo/bar/baz", false},
+		{"bar/*", "foo", false},
+		{"bar", "foo", false},
+	} {
+		m := &globMatcher{glob: tt.glob, inverse: true}
+		if got := m.ExcludePrefix(tt.prefix); got != tt.want {
+			t.Errorf("(%v).ExcludePrefix(%q): got %t; want %t",
+				m, tt.prefix, got, tt.want)
+		}
+	}
+}
+
+func TestExcludePrefixRegex(t *testing.T) {
 	m := newRegexMatcher(regexp.MustCompile("foo"), false)
 	if m.ExcludePrefix("bar") {
 		t.Error("m.ExcludePrefix gave true for a non-inverted matcher")
