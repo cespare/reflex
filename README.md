@@ -335,3 +335,4 @@ background on this issue.
 * Rich Liebling ([rliebling](https://github.com/rliebling))
 * Seth W. Klein ([sethwklein](https://github.com/sethwklein))
 * Vincent Vanackere ([vanackere](https://github.com/vanackere))
+* Richard Cox ([Khabi](https://github.com/Khabi))
