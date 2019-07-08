@@ -19,17 +19,17 @@ import (
 
 // A Reflex is a single watch + command to execute.
 type Reflex struct {
-	id           int
-	source       string // Describes what config/line defines this Reflex
-	startService bool
-	backlog      Backlog
-	matcher      Matcher
-	onlyFiles    bool
-	onlyDirs     bool
-	command      []string
-	subSymbol    string
-	subPathSymbol   string
-	done         chan struct{}
+	id            int
+	source        string // Describes what config/line defines this Reflex
+	startService  bool
+	backlog       Backlog
+	matcher       Matcher
+	onlyFiles     bool
+	onlyDirs      bool
+	command       []string
+	subSymbol     string
+	subPathSymbol string
+	done          chan struct{}
 
 	mu      *sync.Mutex // protects killed and running
 	killed  bool
@@ -64,7 +64,7 @@ func NewReflex(c *Config) (*Reflex, error) {
 
 	substitution := false
 	for _, part := range c.command {
-		if strings.Contains(part, c.subSymbol) || strings.Contains(part, c.subPathSymbol){
+		if strings.Contains(part, c.subSymbol) || strings.Contains(part, c.subPathSymbol) {
 			substitution = true
 			break
 		}
@@ -89,19 +89,19 @@ func NewReflex(c *Config) (*Reflex, error) {
 	}
 
 	reflex := &Reflex{
-		id:           reflexID,
-		source:       c.source,
-		startService: c.startService,
-		backlog:      backlog,
-		matcher:      matcher,
-		onlyFiles:    c.onlyFiles,
-		onlyDirs:     c.onlyDirs,
-		command:      c.command,
-		subSymbol:    c.subSymbol,
+		id:            reflexID,
+		source:        c.source,
+		startService:  c.startService,
+		backlog:       backlog,
+		matcher:       matcher,
+		onlyFiles:     c.onlyFiles,
+		onlyDirs:      c.onlyDirs,
+		command:       c.command,
+		subSymbol:     c.subSymbol,
 		subPathSymbol: c.subPathSymbol,
-		done:         make(chan struct{}),
-		timeout:      c.shutdownTimeout,
-		mu:           &sync.Mutex{},
+		done:          make(chan struct{}),
+		timeout:       c.shutdownTimeout,
+		mu:            &sync.Mutex{},
 	}
 	reflexID++
 

@@ -43,7 +43,7 @@ func (c *Config) registerFlags(f *flag.FlagSet) {
 	f.StringVar(&c.subSymbol, "substitute", defaultSubSymbol, `
             The substitution symbol that is replaced with the filename
             in a command.`)
-    f.StringVar(&c.subPathSymbol, "pathsubstitute", defaultSubPathSymbol, `
+	f.StringVar(&c.subPathSymbol, "pathsubstitute", defaultSubPathSymbol, `
     		The substitution symbol that is replace with the path to the file
     		in a command.`)
 	f.BoolVarP(&c.startService, "start-service", "s", false, `
