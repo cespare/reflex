@@ -15,6 +15,7 @@ import (
 )
 
 const defaultSubSymbol = "{}"
+const defaultSubPathSymbol = "||"
 
 var (
 	reflexes []*Reflex

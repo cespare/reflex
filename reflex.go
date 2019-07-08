@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"sync"
 	"syscall"
@@ -27,6 +28,7 @@ type Reflex struct {
 	onlyDirs     bool
 	command      []string
 	subSymbol    string
+	subPathSymbol   string
 	done         chan struct{}
 
 	mu      *sync.Mutex // protects killed and running
@@ -56,9 +58,13 @@ func NewReflex(c *Config) (*Reflex, error) {
 		return nil, errors.New("substitution symbol must be non-empty")
 	}
 
+	if c.subPathSymbol == "" {
+		return nil, errors.New("path substitution symbol must be non-empty")
+	}
+
 	substitution := false
 	for _, part := range c.command {
-		if strings.Contains(part, c.subSymbol) {
+		if strings.Contains(part, c.subSymbol) || strings.Contains(part, c.subPathSymbol){
 			substitution = true
 			break
 		}
@@ -92,6 +98,7 @@ func NewReflex(c *Config) (*Reflex, error) {
 		onlyDirs:     c.onlyDirs,
 		command:      c.command,
 		subSymbol:    c.subSymbol,
+		subPathSymbol: c.subPathSymbol,
 		done:         make(chan struct{}),
 		timeout:      c.shutdownTimeout,
 		mu:           &sync.Mutex{},
@@ -115,8 +122,9 @@ func (r *Reflex) String() string {
 	}
 	if !r.startService {
 		fmt.Fprintln(&buf, "| Substitution symbol", r.subSymbol)
+		fmt.Fprintln(&buf, "| Path Substitution Symbol", r.subPathSymbol)
 	}
-	replacer := strings.NewReplacer(r.subSymbol, "<filename>")
+	replacer := strings.NewReplacer(r.subSymbol, "<filename>", r.subPathSymbol, "<path>")
 	command := make([]string, len(r.command))
 	for i, part := range r.command {
 		command[i] = replacer.Replace(part)
@@ -245,8 +253,9 @@ func (r *Reflex) terminate() {
 	}
 }
 
-func replaceSubSymbol(command []string, subSymbol string, name string) []string {
-	replacer := strings.NewReplacer(subSymbol, name)
+func replaceSubSymbol(command []string, subSymbol string, subPathSymbol string, name string) []string {
+	p := fmt.Sprintf("%s/", filepath.Dir(name))
+	replacer := strings.NewReplacer(subSymbol, name, subPathSymbol, p)
 	newCommand := make([]string, len(command))
 	for i, c := range command {
 		newCommand[i] = replacer.Replace(c)
@@ -259,7 +268,7 @@ var seqCommands = &sync.Mutex{}
 // runCommand runs the given Command. All output is passed line-by-line to the
 // stdout channel.
 func (r *Reflex) runCommand(name string, stdout chan<- OutMsg) {
-	command := replaceSubSymbol(r.command, r.subSymbol, name)
+	command := replaceSubSymbol(r.command, r.subSymbol, r.subPathSymbol, name)
 	cmd := exec.Command(command[0], command[1:]...)
 	r.cmd = cmd
 
