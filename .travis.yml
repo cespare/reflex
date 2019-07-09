@@ -1,0 +1,43 @@
+language: go
+go:
+- 1.12.x
+os:
+  - linux
+  - osx
+sudo: false
+stage: deploy
+go_import_path: github.com/cespare/reflex
+before_deploy:
+- env GO111MODULE=on go mod download
+- "./script/build-all.bash"
+deploy:
+  provider: releases
+  api_key:
+    secure: JYWgTqgsmLrri2PBVQvBkv6Y2LPApX4GgWxMp8RcMHjJ3lWXNKrZpHScTGyB9xI51LOJnDJP6kaGZotyO9L03zp8TXTvjJQPIXVo0u7A59XC/cIdlcDVTUtmfnCrTYBrQyJ8cTctr6KovNhdiJBHrT88J3SED875UZ6EhyWNnA3WmRK+q8VxFHCH0qQg++MyJL81E97dOrvKSr887C42IjPKXo2cUGXV1aU3MsLZ2Ea1z/qFaam7iTuvP23HAJv5u9McArofuiU65A09+wavG+IMTcR55ZQ106h2gSdtgIh9r714slL2UdRmRgBP13Yy04cp6MUXlSrG3Eh90oqYzaAFmj1hlC3SL/7eBDdElaT0YfG9jdQ2kdITTwD9oO5dSdpG6bVbYXU2r+iYV6AyI4/3bkahKMrWpmOXZXEGXKdX+91sHR8bzow9DzZbIkIikrWeBaLaY/EqKGcHOY5T+aGxwO6O75N3NpWsKZ/i3bvCd5AuTALpZ2CGaqenWzeZH14mIm/LV1WW2G7nINtso3jnNmZ6rT2VLXzx8U3Xud42BiGVG17cvdRKwT/tMmv/FdblSUE+9T3I318z+GulZvM9vJkx/E2fuJQZwvFRVNP8POemv7EK9cFRXetaWUi/vjoY/UKgZp+lqAeHW+eouxIvalnQUem4fTZruqom5ZY=
+  file:
+    - release/reflex-darwin-386
+    - release/reflex-darwin-386.sha256
+    - release/reflex-darwin-amd64
+    - release/reflex-darwin-amd64.sha256
+    - release/reflex-freebsd-386
+    - release/reflex-freebsd-386.sha256
+    - release/reflex-freebsd-amd64
+    - release/reflex-freebsd-amd64.sha256
+    - release/reflex-linux-386
+    - release/reflex-linux-386.sha256
+    - release/reflex-linux-amd64
+    - release/reflex-linux-amd64.sha256
+    - release/reflex-linux-arm
+    - release/reflex-linux-arm.sha256
+    - release/reflex-linux-arm64
+    - release/reflex-linux-arm64.sha256
+    - release/reflex-linux-ppc64
+    - release/reflex-linux-ppc64.sha256
+    - release/reflex-linux-ppc64le
+    - release/reflex-linux-ppc64le.sha256
+    - release/reflex-linux-s390x
+    - release/reflex-linux-s390x.sha256
+  skip_cleanup: true
+  on:
+    branch: master
+    tags: true
