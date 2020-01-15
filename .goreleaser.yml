@@ -1,0 +1,19 @@
+builds:
+  -
+    binary: reflex
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+
+archives:
+  -
+    replacements:
+      amd64: 64-bit
+      386: 32-bit
+      darwin: MacOS
+      linux: Linux
+    files:
+      - README.md
+      - LICENSE
