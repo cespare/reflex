@@ -2,6 +2,7 @@ TAG = $(shell git describe --tags --abbrev=0)
 all:
 	$(MAKE) test
 	$(MAKE) build_reflex
+	$(MAKE) build_tarball
 
 test:
 	$(info ************    Testing Reflex    ************)
@@ -19,10 +20,14 @@ build_reflex:
 	docker run --rm -e "GOOS=darwin" -v "$(PWD):/usr/src/myapp" -w /usr/src/myapp golang:1.14 go build -v -o build/macosx/reflex
 	$(info ************    BUILD FINISHED    ************)
 
+build_tarball:
+	$(info ************    Creating a tarball  ************)
+	tar -czvf build/binaries.tar.gz build
+
 build_reflex_docker:
 	$(info ************    Building docker container   ************)
 	git fetch --all
 	docker build -t  reflex:$(TAG) .
     $(info ************    Building docker container DONE!    ************)
 
-.PHONY: test build_reflex build_reflex_docker
+.PHONY: test build_reflex build_tarball build_reflex_docker
