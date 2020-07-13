@@ -21,6 +21,7 @@ type UnifiedBacklog struct {
 	empty bool
 }
 
+// NewUnifiedBacklog returns an UnifiedBacklog empty by default.
 func NewUnifiedBacklog() *UnifiedBacklog {
 	return &UnifiedBacklog{empty: true}
 }
@@ -59,6 +60,7 @@ type UniqueFilesBacklog struct {
 	rest  map[string]struct{}
 }
 
+// NewUniqueFilesBacklog UniqueFilesBacklog empty by default.
 func NewUniqueFilesBacklog() *UniqueFilesBacklog {
 	return &UniqueFilesBacklog{
 		empty: true,
