@@ -315,6 +315,7 @@ func (r *Reflex) runCommand(name string, stdout chan<- OutMsg) {
 	}()
 }
 
+// Start : start chans for changes and dispatch go routines
 func (r *Reflex) Start(changes <-chan string) {
 	filtered := make(chan string)
 	batched := make(chan string)
@@ -328,12 +329,14 @@ func (r *Reflex) Start(changes <-chan string) {
 	}
 }
 
+// Killed function eval if it is killed or not and returns a bool
 func (r *Reflex) Killed() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.killed
 }
 
+// Running eval if it is Running or not and returns a bool
 func (r *Reflex) Running() bool {
 	r.mu.Lock()
 	defer r.mu.Unlock()

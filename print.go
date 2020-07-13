@@ -6,8 +6,10 @@ import (
 	"strings"
 )
 
+// Decoration type is an integer
 type Decoration int
 
+// DecorationNone list exported Const
 const (
 	DecorationNone = iota
 	DecorationPlain
@@ -21,6 +23,7 @@ const (
 	numColors  = 5
 )
 
+// OutMsg struct
 type OutMsg struct {
 	reflexID int
 	msg      string

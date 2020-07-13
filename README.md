@@ -19,6 +19,22 @@ Reflex probably only works on Linux and Mac OS.
 
 TODO: provide compiled downloads for linux/darwin amd64.
 
+## Building and compilation
+
+This repo uses [Docker](https://www.docker.com/get-started) and [Makefile](https://www.gnu.org/software/make/manual/make.html#toc-Overview-of-make)
+
+### Build binaries and run tests
+```sh
+make
+```
+### Build a docker container with reflex and tag it
+You can create a new git tag and build a new container version running the following command:
+```sh
+git tag -a v0.2.0 -m "my version v0.2.0"
+```
+```sh
+make build_reflex_docker
+```
 ## Usage
 
 The following is given by running `reflex -h`:

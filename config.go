@@ -13,6 +13,7 @@ import (
 	flag "github.com/ogier/pflag"
 )
 
+// Config struct defines configuration
 type Config struct {
 	command         []string
 	source          string
