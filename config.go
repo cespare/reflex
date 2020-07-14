@@ -26,6 +26,7 @@ type Config struct {
 	onlyFiles       bool
 	onlyDirs        bool
 	allFiles        bool
+	terminateSignal string
 }
 
 func (c *Config) registerFlags(f *flag.FlagSet) {
@@ -53,6 +54,9 @@ func (c *Config) registerFlags(f *flag.FlagSet) {
             Only match directories (not files).`)
 	f.BoolVar(&c.allFiles, "all", false, `
             Include normally ignored files (VCS and editor special files).`)
+	f.StringVar(&c.terminateSignal, "signal", "SIGINT", `
+            Signal used to terminate running process. The name should start with "SIG".`)
+
 }
 
 // ReadConfigs reads configurations from either a file or, as a special case,

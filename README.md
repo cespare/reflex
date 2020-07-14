@@ -56,6 +56,8 @@ OPTIONS are given below:
             Don't run multiple commands at the same time.
   -t, --shutdown-timeout=500ms:
             Allow services this long to shut down.
+      --signal="SIGINT":
+            Signal used to terminate running process. The name should start with "SIG".
   -s, --start-service=false:
             Indicates that the command is a long-running process to be
             restarted on matching changes.

@@ -18,16 +18,17 @@ import (
 
 // A Reflex is a single watch + command to execute.
 type Reflex struct {
-	id           int
-	source       string // Describes what config/line defines this Reflex
-	startService bool
-	backlog      Backlog
-	matcher      Matcher
-	onlyFiles    bool
-	onlyDirs     bool
-	command      []string
-	subSymbol    string
-	done         chan struct{}
+	id              int
+	source          string // Describes what config/line defines this Reflex
+	startService    bool
+	backlog         Backlog
+	matcher         Matcher
+	onlyFiles       bool
+	onlyDirs        bool
+	command         []string
+	subSymbol       string
+	done            chan struct{}
+	terminateSignal syscall.Signal
 
 	mu      *sync.Mutex // protects killed and running
 	killed  bool
@@ -82,19 +83,25 @@ func NewReflex(c *Config) (*Reflex, error) {
 		return nil, errors.New("shutdown timeout cannot be <= 0")
 	}
 
+	terminateSignal, err := SignalFromString(c.terminateSignal)
+	if err != nil {
+		return nil, err
+	}
+
 	reflex := &Reflex{
-		id:           reflexID,
-		source:       c.source,
-		startService: c.startService,
-		backlog:      backlog,
-		matcher:      matcher,
-		onlyFiles:    c.onlyFiles,
-		onlyDirs:     c.onlyDirs,
-		command:      c.command,
-		subSymbol:    c.subSymbol,
-		done:         make(chan struct{}),
-		timeout:      c.shutdownTimeout,
-		mu:           &sync.Mutex{},
+		id:              reflexID,
+		source:          c.source,
+		startService:    c.startService,
+		backlog:         backlog,
+		matcher:         matcher,
+		onlyFiles:       c.onlyFiles,
+		onlyDirs:        c.onlyDirs,
+		command:         c.command,
+		subSymbol:       c.subSymbol,
+		done:            make(chan struct{}),
+		timeout:         c.shutdownTimeout,
+		terminateSignal: terminateSignal,
+		mu:              &sync.Mutex{},
 	}
 	reflexID++
 
@@ -217,17 +224,13 @@ func (r *Reflex) terminate() {
 	r.tty.Write([]byte{3})
 
 	timer := time.NewTimer(r.timeout)
-	sig := syscall.SIGINT
+	sig := r.terminateSignal
 	for {
 		select {
 		case <-r.done:
 			return
 		case <-timer.C:
-			if sig == syscall.SIGINT {
-				infoPrintln(r.id, "Sending SIGINT signal...")
-			} else {
-				infoPrintln(r.id, "Sending SIGKILL signal...")
-			}
+			infoPrintln(r.id, fmt.Sprintf("Sending %s signal...", SignalToString(sig)))
 
 			// Instead of killing the process, we want to kill its
 			// whole pgroup in order to clean up any children the
