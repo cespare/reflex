@@ -13,7 +13,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/kr/pty"
+	"github.com/creack/pty"
 )
 
 // A Reflex is a single watch + command to execute.
