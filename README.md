@@ -11,13 +11,17 @@ for reloading your application when the code changes.
 
 ## Installation
 
+Reflex only works on Linux and Mac OS.
+
+### Prebuilt Binaries
+
+You can download the appropriate binary from the [releases page](https://github.com/cespare/reflex/releases).
+
+### Build from source
+
 You'll need Go 1.11+ installed:
 
     $ go get github.com/cespare/reflex
-
-Reflex probably only works on Linux and Mac OS.
-
-TODO: provide compiled downloads for linux/darwin amd64.
 
 ## Usage
 
