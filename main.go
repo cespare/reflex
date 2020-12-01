@@ -22,6 +22,7 @@ var (
 	flagConf       string
 	flagSequential bool
 	flagDecoration string
+	flagPath       string
 	decoration     Decoration
 	verbose        bool
 	globalFlags    = flag.NewFlagSet("", flag.ContinueOnError)
@@ -71,6 +72,8 @@ func init() {
             Don't run multiple commands at the same time.`)
 	globalFlags.StringVarP(&flagDecoration, "decoration", "d", "plain", `
             How to decorate command output. Choices: none, plain, fancy.`)
+	globalFlags.StringVarP(&flagPath, "path", "p", ".", `
+            Path to directory to scan for changes`)
 	globalConfig.registerFlags(globalFlags)
 }
 
@@ -191,7 +194,9 @@ func main() {
 	for i := range reflexes {
 		broadcastChanges[i] = make(chan string)
 	}
-	go watch(".", watcher, changes, done, reflexes)
+	for _, path := range strings.Split(flagPath, ",") {
+		go watch(path, watcher, changes, done, reflexes)
+	}
 	go broadcast(broadcastChanges, changes)
 	go printOutput(stdout, os.Stdout)
 
