@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -286,14 +287,21 @@ func (r *Reflex) runCommand(name string, stdout chan<- OutMsg) {
 	chResize <- syscall.SIGWINCH // Initial resize.
 
 	go func() {
-		scanner := bufio.NewScanner(tty)
-		for scanner.Scan() {
-			stdout <- OutMsg{r.id, scanner.Text()}
+		scanner := bufio.NewReader(tty)
+		for {
+			buf, _, err := scanner.ReadLine()
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				// Intentionally ignoring err for now. Unfortunately,
+				// the pty returns a read error when the child dies naturally,
+				// so I'm just going to ignore errors here unless I can find a
+				// better way to handle it.
+				continue
+			}
+			stdout <- OutMsg{r.id, string(buf)}
 		}
-		// Intentionally ignoring scanner.Err() for now. Unfortunately,
-		// the pty returns a read error when the child dies naturally,
-		// so I'm just going to ignore errors here unless I can find a
-		// better way to handle it.
 	}()
 
 	r.mu.Lock()
