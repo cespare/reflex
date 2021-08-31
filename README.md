@@ -11,13 +11,17 @@ for reloading your application when the code changes.
 
 ## Installation
 
-You'll need Go 1.11+ installed:
+You can download binaries from the
+[Releases page](https://github.com/cespare/reflex/releases).
 
-    $ go get github.com/cespare/reflex
+To compile from source, you'll need Go 1.13+ installed.
 
-Reflex probably only works on Linux and Mac OS.
+If you have Go 1.16 or later, you can download and install the latest module
+version directly with
 
-TODO: provide compiled downloads for linux/darwin amd64.
+    go install github.com/cespare/reflex@latest
+
+Reflex is only tested on Linux and macOS.
 
 ## Usage
 
@@ -123,7 +127,7 @@ of the substitution symbol inside your command is replaced by the filename.
 As a simple example, suppose you're writing Coffeescript and you wish to compile
 the CS files to Javascript when they change. You can do this with:
 
-    $ reflex -r '\.coffee$' -- coffee -c {}
+    reflex -r '\.coffee$' -- coffee -c {}
 
 In case you need to use `{}` for something else in your command, you can change
 the substitution symbol with the `--substitute` flag.
