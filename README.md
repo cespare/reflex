@@ -312,7 +312,7 @@ background on this issue.
 * https://github.com/mynyml/watchr
 * https://github.com/eaburns/Watch
 * https://github.com/alloy/kicker
-* https://github.com/eradman/entr/
+* https://github.com/eradman/entr
 
 ### Why you should use reflex instead
 
