@@ -10,7 +10,7 @@ import (
 )
 
 func TestReadConfigs(t *testing.T) {
-	const in = `-g '*.go' echo {}
+	const in = `-g '*.go' echo {} ||
 
 # Some comment here
 -r '^a[0-9]+\.txt$' --only-dirs --substitute='[]' echo []
@@ -28,10 +28,11 @@ world"
 	}
 	want := []*Config{
 		{
-			command:         []string{"echo", "{}"},
+			command:         []string{"echo", "{}", "||"},
 			source:          "test input, line 1",
 			globs:           []string{"*.go"},
 			subSymbol:       "{}",
+			subPathSymbol:   "||",
 			shutdownTimeout: 500 * time.Millisecond,
 		},
 		{
@@ -39,6 +40,7 @@ world"
 			source:          "test input, line 4",
 			regexes:         []string{`^a[0-9]+\.txt$`},
 			subSymbol:       "[]",
+			subPathSymbol:   "||",
 			shutdownTimeout: 500 * time.Millisecond,
 			onlyDirs:        true,
 		},
@@ -47,6 +49,7 @@ world"
 			source:          "test input, line 6",
 			globs:           []string{"*.go"},
 			subSymbol:       "{}",
+			subPathSymbol:   "||",
 			startService:    true,
 			shutdownTimeout: 500 * time.Millisecond,
 			onlyFiles:       true,
@@ -59,6 +62,7 @@ world"
 			inverseRegexes:  []string{"baz"},
 			inverseGlobs:    []string{"b", "c"},
 			subSymbol:       "{}",
+			subPathSymbol:   "||",
 			shutdownTimeout: 500 * time.Millisecond,
 		},
 	}
@@ -76,6 +80,7 @@ func TestReadConfigsBad(t *testing.T) {
 		"--substitute='' echo hi",
 		"-s echo {}",
 		"--only-files --only-dirs echo hi",
+		"--pathsubstitute='' echo hi",
 	} {
 		r := strings.NewReader(in)
 		if configs, err := readConfigsFromReader(r, "test input"); err == nil {

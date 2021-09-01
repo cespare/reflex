@@ -31,8 +31,8 @@ The following is given by running `reflex -h`:
 Usage: reflex [OPTIONS] [COMMAND]
 
 COMMAND is any command you'd like to run. Any instance of {} will be replaced
-with the filename of the changed file. (The symbol may be changed with the
---substitute flag.)
+with the filename of the changed file and || will be replaced with the path to the changed file. (The symbol may be changed with the
+--substitute or --pathsubstitute flag.)
 
 OPTIONS are given below:
       --all=false:
@@ -54,6 +54,9 @@ OPTIONS are given below:
             Only match directories (not files).
       --only-files=false:
             Only match files (not directories).
+      --pathsubstitute="||": 
+            The substitution symbol that is replace with the path to the file
+            in a command.
   -r, --regex=[]:
             A regular expression to match filenames. (May be repeated.)
   -e, --sequential=false:
@@ -121,8 +124,8 @@ changed.
 ### Substitution
 
 Reflex provides a way for you to determine, inside your command, what file
-changed. This is via a substitution symbol. The default is `{}`. Every instance
-of the substitution symbol inside your command is replaced by the filename.
+changed and the path to the file. This is via a substitution symbol. The default is `{}` for files and `||` for paths. Every instance
+of the substitution symbol inside your command is replaced by the filename or path.
 
 As a simple example, suppose you're writing Coffeescript and you wish to compile
 the CS files to Javascript when they change. You can do this with:
@@ -336,3 +339,4 @@ background on this issue.
 * Rich Liebling ([rliebling](https://github.com/rliebling))
 * Seth W. Klein ([sethwklein](https://github.com/sethwklein))
 * Vincent Vanackere ([vanackere](https://github.com/vanackere))
+* Richard Cox ([Khabi](https://github.com/Khabi))
