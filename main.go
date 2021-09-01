@@ -14,7 +14,10 @@ import (
 	flag "github.com/ogier/pflag"
 )
 
-const defaultSubSymbol = "{}"
+const (
+	defaultSubSymbol  = "{}"
+	defaultConfigFile = "reflex.conf"
+)
 
 var (
 	reflexes []*Reflex
@@ -139,13 +142,26 @@ func main() {
 
 	var configs []*Config
 	if flagConf == "" {
+		if _, err := os.Stat(defaultConfigFile); err != nil {
+			if !os.IsNotExist(err) {
+				log.Fatalf("Could not read %s: %v.", defaultConfigFile, err)
+			}
+		} else {
+			flagConf = defaultConfigFile
+		}
+	}
+
+	if flagConf == "" {
 		if flagSequential {
 			log.Fatal("Cannot set --sequential without --config (because you cannot specify multiple commands).")
 		}
 		configs = []*Config{globalConfig}
 	} else {
 		if anyNonGlobalsRegistered() {
-			log.Fatal("Cannot set other flags along with --config other than --sequential, --verbose, and --decoration.")
+			log.Fatalf(
+				"Cannot set other flags other than --sequential, --verbose, and --decoration, when --config is specified or %s exists.",
+				defaultConfigFile,
+			)
 		}
 		var err error
 		configs, err = ReadConfigs(flagConf)
