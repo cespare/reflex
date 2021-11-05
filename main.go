@@ -22,6 +22,7 @@ var (
 	flagConf       string
 	flagSequential bool
 	flagDecoration string
+	flagDirectory  string
 	decoration     Decoration
 	verbose        bool
 	globalFlags    = flag.NewFlagSet("", flag.ContinueOnError)
@@ -71,6 +72,8 @@ func init() {
             Don't run multiple commands at the same time.`)
 	globalFlags.StringVarP(&flagDecoration, "decoration", "d", "plain", `
             How to decorate command output. Choices: none, plain, fancy.`)
+	globalFlags.StringVarP(&flagDirectory, "directory", "D", ".", `
+            Set working directory.`)
 	globalConfig.registerFlags(globalFlags)
 }
 
@@ -136,6 +139,8 @@ func main() {
 	default:
 		log.Fatalf("Invalid decoration %s. Choices: none, plain, fancy.", flagDecoration)
 	}
+
+	os.Chdir(flagDirectory)
 
 	var configs []*Config
 	if flagConf == "" {
