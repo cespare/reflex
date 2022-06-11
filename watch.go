@@ -53,6 +53,14 @@ func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done cha
 
 func walker(watcher *fsnotify.Watcher, reflexes []*Reflex) filepath.WalkFunc {
 	return func(path string, f os.FileInfo, err error) error {
+		isSymlink := f.Mode()&os.ModeSymlink != 0
+		if isSymlink {
+			// follow symlink paths
+			symlinkPath, _ := filepath.EvalSymlinks(path)
+			if symlinkPath != "" {
+				return filepath.Walk(symlinkPath, walker(watcher, reflexes))
+			}
+		}
 		if err != nil || !f.IsDir() {
 			return nil
 		}
