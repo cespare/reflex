@@ -23,7 +23,7 @@ func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done cha
 		select {
 		case e := <-watcher.Events:
 			if verbose {
-				infoPrintln(-1, "fsnotify event:", e)
+				infoPrintln(-1, "", "fsnotify event:", e)
 			}
 			stat, err := os.Stat(e.Name)
 			if err != nil {

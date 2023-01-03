@@ -19,6 +19,7 @@ import (
 // A Reflex is a single watch + command to execute.
 type Reflex struct {
 	id           int
+	name         string
 	source       string // Describes what config/line defines this Reflex
 	startService bool
 	backlog      Backlog
@@ -84,6 +85,7 @@ func NewReflex(c *Config) (*Reflex, error) {
 
 	reflex := &Reflex{
 		id:           reflexID,
+		name:         c.name,
 		source:       c.source,
 		startService: c.startService,
 		backlog:      backlog,
@@ -148,11 +150,11 @@ func (r *Reflex) filterMatching(out chan<- string, in <-chan string) {
 
 // batch receives file notification events and batches them up. It's a bit
 // tricky, but here's what it accomplishes:
-// * When we initially get a message, wait a bit and batch messages before
-//   trying to send anything. This is because the file events come in bursts.
-// * Once it's time to send, don't do it until the out channel is unblocked.
-//   In the meantime, keep batching. When we've sent off all the batched
-//   messages, go back to the beginning.
+//   - When we initially get a message, wait a bit and batch messages before
+//     trying to send anything. This is because the file events come in bursts.
+//   - Once it's time to send, don't do it until the out channel is unblocked.
+//     In the meantime, keep batching. When we've sent off all the batched
+//     messages, go back to the beginning.
 func (r *Reflex) batch(out chan<- string, in <-chan string) {
 
 	const silenceInterval = 300 * time.Millisecond
@@ -192,10 +194,10 @@ func (r *Reflex) runEach(names <-chan string) {
 	for name := range names {
 		if r.startService {
 			if r.Running() {
-				infoPrintln(r.id, "Killing service")
+				infoPrintln(r.id, r.name, "Killing service")
 				r.terminate()
 			}
-			infoPrintln(r.id, "Starting service")
+			infoPrintln(r.id, r.name, "Starting service")
 			r.runCommand(name, stdout)
 		} else {
 			r.runCommand(name, stdout)
@@ -224,16 +226,16 @@ func (r *Reflex) terminate() {
 			return
 		case <-timer.C:
 			if sig == syscall.SIGINT {
-				infoPrintln(r.id, "Sending SIGINT signal...")
+				infoPrintln(r.id, r.name, "Sending SIGINT signal...")
 			} else {
-				infoPrintln(r.id, "Sending SIGKILL signal...")
+				infoPrintln(r.id, r.name, "Sending SIGKILL signal...")
 			}
 
 			// Instead of killing the process, we want to kill its
 			// whole pgroup in order to clean up any children the
 			// process may have created.
 			if err := syscall.Kill(-1*r.cmd.Process.Pid, sig); err != nil {
-				infoPrintln(r.id, "Error killing:", err)
+				infoPrintln(r.id, r.name, "Error killing:", err)
 				if err.(syscall.Errno) == syscall.ESRCH { // no such process
 					return
 				}
@@ -269,7 +271,7 @@ func (r *Reflex) runCommand(name string, stdout chan<- OutMsg) {
 
 	tty, err := pty.Start(cmd)
 	if err != nil {
-		infoPrintln(r.id, err)
+		infoPrintln(r.id, r.name, err)
 		return
 	}
 	r.tty = tty
@@ -290,10 +292,10 @@ func (r *Reflex) runCommand(name string, stdout chan<- OutMsg) {
 		// Allow for lines up to 100 MB.
 		scanner.Buffer(nil, 100e6)
 		for scanner.Scan() {
-			stdout <- OutMsg{r.id, scanner.Text()}
+			stdout <- OutMsg{r.id, r.name, scanner.Text()}
 		}
 		if err := scanner.Err(); errors.Is(err, bufio.ErrTooLong) {
-			infoPrintln(r.id, "Error: subprocess emitted a line longer than 100 MB")
+			infoPrintln(r.id, r.name, "Error: subprocess emitted a line longer than 100 MB")
 		}
 		// Intentionally ignore other scanner errors. Unfortunately,
 		// the pty returns a read error when the child dies naturally,
@@ -307,7 +309,7 @@ func (r *Reflex) runCommand(name string, stdout chan<- OutMsg) {
 	go func() {
 		err := cmd.Wait()
 		if !r.Killed() && err != nil {
-			stdout <- OutMsg{r.id, fmt.Sprintf("(error exit: %s)", err)}
+			stdout <- OutMsg{r.id, r.name, fmt.Sprintf("(error exit: %s)", err)}
 		}
 		r.done <- struct{}{}
 
@@ -328,7 +330,7 @@ func (r *Reflex) Start(changes <-chan string) {
 	go r.runEach(batched)
 	if r.startService {
 		// Easy hack to kick off the initial start.
-		infoPrintln(r.id, "Starting service")
+		infoPrintln(r.id, r.name, "Starting service")
 		r.runCommand("", stdout)
 	}
 }
