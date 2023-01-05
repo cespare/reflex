@@ -22,15 +22,16 @@ const (
 )
 
 type OutMsg struct {
-	reflexID int
-	msg      string
+	reflexID   int
+	reflexName string
+	msg        string
 }
 
-func infoPrintln(id int, args ...interface{}) {
-	stdout <- OutMsg{id, strings.TrimSpace(fmt.Sprintln(args...))}
+func infoPrintln(id int, name string, args ...interface{}) {
+	stdout <- OutMsg{id, name, strings.TrimSpace(fmt.Sprintln(args...))}
 }
-func infoPrintf(id int, format string, args ...interface{}) {
-	stdout <- OutMsg{id, fmt.Sprintf(format, args...)}
+func infoPrintf(id int, name string, format string, args ...interface{}) {
+	stdout <- OutMsg{id, name, fmt.Sprintf(format, args...)}
 }
 
 func printMsg(msg OutMsg, writer io.Writer) {
@@ -38,8 +39,10 @@ func printMsg(msg OutMsg, writer io.Writer) {
 	if decoration == DecorationFancy || decoration == DecorationPlain {
 		if msg.reflexID < 0 {
 			tag = "[info]"
-		} else {
+		} else if msg.reflexName == "" {
 			tag = fmt.Sprintf("[%02d]", msg.reflexID)
+		} else {
+			tag = fmt.Sprintf("[%s]", msg.reflexName)
 		}
 	}
 
