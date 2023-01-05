@@ -16,7 +16,7 @@ const chmodMask fsnotify.Op = ^fsnotify.Op(0) ^ fsnotify.Chmod
 // criteria of all reflexes can be ignored.
 func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done chan<- error, reflexes []*Reflex) {
 	if err := filepath.Walk(root, walker(watcher, reflexes)); err != nil {
-		infoPrintf(-1, "Error while walking path %s: %s", root, err)
+		infoPrintf(-1, "", "Error while walking path %s: %s", root, err)
 	}
 
 	for {
@@ -36,7 +36,7 @@ func watch(root string, watcher *fsnotify.Watcher, names chan<- string, done cha
 			names <- path
 			if e.Op&fsnotify.Create > 0 && stat.IsDir() {
 				if err := filepath.Walk(path, walker(watcher, reflexes)); err != nil {
-					infoPrintf(-1, "Error while walking path %s: %s", path, err)
+					infoPrintf(-1, "", "Error while walking path %s: %s", path, err)
 				}
 			}
 			// TODO: Cannot currently remove fsnotify watches
@@ -68,7 +68,7 @@ func walker(watcher *fsnotify.Watcher, reflexes []*Reflex) filepath.WalkFunc {
 			return filepath.SkipDir
 		}
 		if err := watcher.Add(path); err != nil {
-			infoPrintf(-1, "Error while watching new path %s: %s", path, err)
+			infoPrintf(-1, "", "Error while watching new path %s: %s", path, err)
 		}
 		return nil
 	}
