@@ -21,6 +21,8 @@ version directly with
 
     go install github.com/cespare/reflex@latest
 
+You can also install with [homebrew](https://brew.sh/) by running `brew install reflex`.
+
 Reflex is only tested on Linux and macOS.
 
 ## Usage
