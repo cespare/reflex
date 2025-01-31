@@ -21,6 +21,11 @@ version directly with
 
     go install github.com/cespare/reflex@latest
 
+
+If you don't have Go installed and would like a binary custom built for your system , you can use [goblin.run](https://goblin.run)
+
+    curl -sf https://goblin.run/github.com/cespare/reflex | sh
+
 Reflex is only tested on Linux and macOS.
 
 ## Usage
