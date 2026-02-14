@@ -4,6 +4,7 @@ import "regexp"
 
 var defaultExcludes = []string{
 	// VCS dirs
+	`(^|/)\.jj/`,
 	`(^|/)\.git/`,
 	`(^|/)\.hg/`,
 	// Vim
