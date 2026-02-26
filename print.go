@@ -29,6 +29,7 @@ type OutMsg struct {
 func infoPrintln(id int, args ...interface{}) {
 	stdout <- OutMsg{id, strings.TrimSpace(fmt.Sprintln(args...))}
 }
+
 func infoPrintf(id int, format string, args ...interface{}) {
 	stdout <- OutMsg{id, fmt.Sprintf(format, args...)}
 }
@@ -50,7 +51,7 @@ func printMsg(msg OutMsg, writer io.Writer) {
 		}
 		fmt.Fprintf(writer, "\x1b[01;%dm%s ", color, tag)
 	} else if decoration == DecorationPlain {
-		fmt.Fprintf(writer, tag+" ")
+		fmt.Fprint(writer, tag+" ")
 	}
 	fmt.Fprint(writer, msg.msg)
 	if decoration == DecorationFancy {
