@@ -5,7 +5,7 @@ cd "$(dirname "$0")"
 
 version="$1"
 
-if [[ "$(git rev-parse $version)" != "$(git rev-parse HEAD)" ]]; then
+if [[ "$(git rev-parse "${version}^{commit}")" != "$(git rev-parse HEAD)" ]]; then
   echo "Not currently on version $version" 2>&1
   exit 1
 fi
